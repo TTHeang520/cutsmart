@@ -14,7 +14,7 @@ def test():
 def register():
     data = request.get_json()
     return {
-        "message": "Register route have received data",
+        "message": "Register route received data",
         "received": data
     }
 
