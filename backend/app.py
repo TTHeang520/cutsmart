@@ -52,8 +52,14 @@ def login():
     email = data.get("email")
     password = data.get("password")
 
-    user = get_user_from_email(email)
+    if not email or not password:
+        return {
+            "success": False,
+            "message": "Email and password are required"
+        }, 400
 
+    user = get_user_from_email(email)
+    
     if user is None:
         return {
             "success": False,
@@ -67,7 +73,7 @@ def login():
             "success": False,
             "message": "Invalid email or password"
         }, 401
-
+    
     return {
         "success": True,
         "message": "Login successful"
