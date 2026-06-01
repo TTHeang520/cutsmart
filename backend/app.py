@@ -1,5 +1,7 @@
+import sqlite3
+
 from flask import Flask, request
-from database import init_db,create_user
+from database import init_db, create_user
 from werkzeug.security import generate_password_hash
 
 app = Flask(__name__)
@@ -22,9 +24,15 @@ def register():
     email = data["email"]
     password = data["password"]
 
-    hash_password = generate_password_hash(password)
+    password_hash = generate_password_hash(password)
 
-    create_user(username, email, hash_password)
+    try:
+        create_user(username, email, password_hash)
+    except sqlite3.IntegrityError:
+        return {
+            "success": False,
+            "message": "Email already registered"
+        }, 400
     
     return {
         "success": True,
