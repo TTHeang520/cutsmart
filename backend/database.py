@@ -22,6 +22,14 @@ def init_db():
     connection.commit()
     connection.close()
 
-   
-   
-    
+def create_user(username, email, password_hash):
+    connection = get_db_connection()
+    cursor = connection.cursor()
+
+    cursor.execute(
+        "INSERT INTO users (username, email, password_hash) VALUES (?, ?, ?)",
+        (username, email, password_hash)
+    )
+
+    connection.commit()
+    connection.close()
