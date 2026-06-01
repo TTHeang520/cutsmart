@@ -20,9 +20,15 @@ def test():
 def register():
     data = request.get_json()
 
-    username = data["username"]
-    email = data["email"]
-    password = data["password"]
+    username = data.get("username")
+    email = data.get("email")
+    password = data.get("password")
+
+    if not username or not email or not password:
+        return {
+             "success": False,
+             "message": "Username, email, and password are required"
+         }, 400
 
     password_hash = generate_password_hash(password)
 
@@ -43,8 +49,8 @@ def register():
 def login():
     data = request.get_json()
 
-    email = data["email"]
-    password = data["password"]
+    email = data.get("email")
+    password = data.get("password")
 
     user = get_user_from_email(email)
 
