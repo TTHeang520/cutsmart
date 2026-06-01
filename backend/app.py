@@ -1,6 +1,9 @@
 from flask import Flask, request
+from database import init_db
 
 app = Flask(__name__)
+init_db()
+#to create database whenever app runs
 
 @app.route("/")
 def home():
