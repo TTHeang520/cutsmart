@@ -1,8 +1,8 @@
 import sqlite3
 
 from flask import Flask, request
-from database import init_db, create_user
-from werkzeug.security import generate_password_hash
+from database import init_db, create_user, get_user_from_email
+from werkzeug.security import generate_password_hash, check_password_hash
 
 app = Flask(__name__)
 init_db()
@@ -37,6 +37,34 @@ def register():
     return {
         "success": True,
         "message": "Registered successfully"
+    }
+
+@app.route("/api/login", methods=["POST"])
+def login():
+    data = request.get_json()
+
+    email = data["email"]
+    password = data["password"]
+
+    user = get_user_from_email(email)
+
+    if user is None:
+        return {
+            "success": False,
+            "message": "Invalid email or password"
+        }, 401
+
+    stored_password_hash = user[3]
+
+    if not check_password_hash(stored_password_hash, password):
+        return {
+            "success": False,
+            "message": "Invalid email or password"
+        }, 401
+
+    return {
+        "success": True,
+        "message": "Login successful"
     }
 
 if __name__ == "__main__":
