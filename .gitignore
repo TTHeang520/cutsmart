@@ -3,3 +3,4 @@ __pycache__/
 backend/cutsmart_database
 *.db
 ~$*.docx
+docs/*.docx
