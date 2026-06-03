@@ -37,7 +37,7 @@ Frontend should send JSON with these exact key names:
 }
 ```
 
-### Success Response
+### For Success Response
 
 ```json
 {
@@ -46,7 +46,7 @@ Frontend should send JSON with these exact key names:
 }
 ```
 
-### Error Responses
+### For Error Responses
 
 Missing field:
 
