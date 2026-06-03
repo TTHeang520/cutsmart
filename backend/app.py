@@ -76,7 +76,12 @@ def login():
     
     return {
         "success": True,
-        "message": "Login successful"
+        "message": "Login successful",
+        "user": {
+            "id": user[0],
+            "username": user[1],
+            "email": user[2]
+        }
     }
 
 if __name__ == "__main__":
