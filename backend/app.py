@@ -1,13 +1,14 @@
 import sqlite3
 
 from flask import Flask, request
+from flask_cors import CORS
 from database import init_db, create_user, get_user_from_email
 from werkzeug.security import generate_password_hash, check_password_hash
 
 app = Flask(__name__)
+CORS(app)
 init_db()
 #to create database whenever app runs
-
 @app.route("/")
 def home():
     return "Hello CutSmart"
