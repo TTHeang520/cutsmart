@@ -85,7 +85,7 @@ Frontend should send JSON with these exact key names:
 }
 ```
 
-### Success Response
+### For Success Response
 
 ```json
 {
@@ -99,7 +99,7 @@ Frontend should send JSON with these exact key names:
 }
 ```
 
-### Error Responses
+### For Error Responses
 
 Missing field:
 
@@ -119,10 +119,10 @@ Wrong email or password:
 }
 ```
 
-## Notes For Frontend
+## Some otes For Frontend
 
-- Register and login must use `POST`.
+- Register and login must use `POST` to get users data.
 - Send request data as JSON.
 - Use the exact key names shown in this document.
-- Do not send `id` during register or login. The backend creates and returns it.
-- The backend never returns the password or password hash.
+- `id` is not needed from frontend. The backend creates and returns it.
+- The backend wont return the password or password hash.
