@@ -190,6 +190,10 @@ Example response shape:
   "success": true,
   "message": "Plan generated successfully",
   "plan": {
+    "current_bmi": 26.1,
+    "current_bmi_category": "overweight",
+    "target_bmi": 23.5,
+    "target_bmi_category": "normal",
     "maintenance_calories": 2400,
     "target_calories": 1900,
     "daily_deficit": 500,
@@ -245,6 +249,7 @@ Invalid weight goal:
 ### Planner Notes
 
 - Version 1 focuses on weight loss only.
+- The backend returns BMI together with the calorie plan.
 - The backend calculates the recommended timeline instead of receiving `timeline_weeks` from the frontend.
 - The calculation formula and health/safety references should be recorded separately in the calorie-deficit planner reference document before implementation.
 - The planner gives estimated guidance only. It should not claim to replace medical or professional health advice.
