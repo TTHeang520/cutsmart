@@ -1,6 +1,7 @@
 import sqlite3
+from pathlib import Path
 
-DATABASE_NAME = "cutsmart_database"
+DATABASE_NAME = Path(__file__).resolve().parent / "cutsmart_database"
 
 def get_db_connection():
     connection = sqlite3.connect(DATABASE_NAME)
