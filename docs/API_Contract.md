@@ -194,6 +194,8 @@ Example response shape:
     "current_bmi_category": "overweight",
     "target_bmi": 23.5,
     "target_bmi_category": "normal",
+    "bmr": 1755,
+    "activity_multiplier": 1.375,
     "maintenance_calories": 2400,
     "target_calories": 1900,
     "daily_deficit": 500,
@@ -201,6 +203,9 @@ Example response shape:
     "exercise_deficit": 200,
     "estimated_weight_loss_kg_per_week": 0.45,
     "recommended_timeline_weeks": 18,
+    "protein_g": 96,
+    "carbs_g": 215,
+    "fat_g": 53,
     "strategy": "balanced",
     "exercise_habit": "light_exercise",
     "warning": null
@@ -250,8 +255,10 @@ Invalid weight goal:
 
 - Version 1 focuses on weight loss only.
 - The backend returns BMI together with the calorie plan.
+- The backend returns BMR and activity multiplier so the frontend can explain how maintenance calories were estimated.
+- Version 1 macro guidance returns estimated `protein_g`, `carbs_g`, and `fat_g`.
 - The backend calculates the recommended timeline instead of receiving `timeline_weeks` from the frontend.
-- The calculation formula and health/safety references should be recorded separately in the calorie-deficit planner reference document before implementation.
+- Full formulas and references are recorded in `docs/Calorie_Deficit_Planner_Reference.md`.
 - The planner gives estimated guidance only. It should not claim to replace medical or professional health advice.
 
 ## Some Notes For Frontend
