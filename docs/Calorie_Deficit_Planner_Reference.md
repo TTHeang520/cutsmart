@@ -105,6 +105,18 @@ active_exercise       -> 1.725
 very_active_exercise  -> 1.9
 ```
 
+These activity multipliers are a simple version 1 estimate of the user's average daily activity level. They do not calculate exact calories burned from each individual workout.
+
+The general idea is based on physical activity level: total daily energy needs can be estimated from BMR and an activity factor. However, the exact values used in version 1 are simplified app assumptions, not a precise clinical measurement.
+
+A future version can improve this by adding daily exercise logging:
+
+```text
+daily_allowed_calories = base_target_calories + extra_exercise_calories_today
+```
+
+This would let users record different exercise on different days instead of relying only on one average `exercise_habit`.
+
 ## Daily Calorie Deficit
 
 CutSmart version 1 starts with a default daily deficit:
@@ -198,6 +210,13 @@ If the required daily deficit is above 1000 kcal/day, the timeline is considered
 If the requested target calories fall below the safety floor, the timeline is not accepted even if the daily deficit is below 1000 kcal/day.
 
 If the desired timeline is not accepted, CutSmart should return a safer `recommended_timeline_weeks` instead.
+
+If the desired timeline is accepted, CutSmart can set:
+
+```text
+recommended_timeline_weeks = desired_timeline_weeks
+timeline_status = accepted
+```
 
 ## Strategy Split
 
@@ -324,12 +343,31 @@ https://pubmed.ncbi.nlm.nih.gov/2305711/
 
 Used for estimating resting energy expenditure / BMR from weight, height, age, and gender.
 
+### Activity Multiplier
+
+FAO/WHO/UNU Human Energy Requirements  
+https://www.fao.org/4/y5686e/y5686e07.htm
+
+Used to support the general idea that daily energy needs can be estimated using BMR and physical activity level. CutSmart's exact version 1 multipliers are simplified assumptions for a beginner MVP and should be improved in future versions if more detailed activity data is collected.
+
 ### 500 kcal Deficit
 
 MedlinePlus: 10 ways to cut 500 calories a day  
 https://medlineplus.gov/ency/patientinstructions/000892.htm
 
 Used to support 500 kcal/day as a common starting point for weight loss planning.
+
+### Desired Timeline Safety Limit
+
+CDC: Steps for Losing Weight  
+https://www.cdc.gov/healthy-weight-growth/losing-weight/index.html
+
+Used to support gradual weight loss planning. CutSmart uses the common 1 to 2 lb/week guidance as the reason for treating a required deficit above about 1000 kcal/day as too aggressive for version 1.
+
+NHLBI Practical Guide to the Identification, Evaluation, and Treatment of Overweight and Obesity in Adults  
+https://www.nhlbi.nih.gov/files/docs/guidelines/prctgd_c.pdf
+
+Used as additional clinical background for reduced-calorie diet planning in adults with overweight or obesity.
 
 ### Safety Floor
 
