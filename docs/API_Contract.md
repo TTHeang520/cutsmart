@@ -189,9 +189,7 @@ balanced
 ```text
 not_provided
 accepted
-too_fast_adjusted
-too_low_calorie_adjusted
-slow_but_accepted
+adjusted
 ```
 
 ### For Success Response
