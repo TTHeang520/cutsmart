@@ -130,7 +130,7 @@ POST /api/plan
 
 This route is for the first version of the CutSmart calorie-deficit planner.
 
-The user does not send a timeline. The backend should calculate a recommended timeline for the user instead, because user-entered timelines may be unrealistic.
+The user may send an optional desired timeline. If the user does not send a timeline, the backend should calculate a recommended timeline. If the user sends a timeline, the backend should check whether it is realistic and safe before accepting it.
 
 ### Request
 
@@ -144,7 +144,8 @@ Frontend should send JSON with these exact key names:
   "current_weight_kg": 80,
   "target_weight_kg": 72,
   "exercise_habit": "light_exercise",
-  "strategy": "balanced"
+  "strategy": "balanced",
+  "desired_timeline_weeks": 16
 }
 ```
 
@@ -181,6 +182,16 @@ exercise
 balanced
 ```
 
+`desired_timeline_weeks` is optional. If it is not sent, the backend calculates `recommended_timeline_weeks` using the default plan.
+
+`timeline_status` in the response should be one of:
+
+```text
+not_provided
+accepted
+adjusted
+```
+
 ### For Success Response
 
 Example response shape:
@@ -202,13 +213,15 @@ Example response shape:
     "diet_deficit": 300,
     "exercise_deficit": 200,
     "estimated_weight_loss_kg_per_week": 0.45,
+    "desired_timeline_weeks": 16,
     "recommended_timeline_weeks": 18,
+    "timeline_status": "too_fast_adjusted",
     "protein_g": 96,
     "carbs_g": 215,
     "fat_g": 53,
     "strategy": "balanced",
     "exercise_habit": "light_exercise",
-    "warning": null
+    "warning": "Requested timeline is too fast. A safer recommended timeline was returned instead."
   }
 }
 ```
@@ -251,13 +264,25 @@ Invalid weight goal:
 }
 ```
 
+Invalid desired timeline:
+
+```json
+{
+  "success": false,
+  "message": "Desired timeline must be a positive number"
+}
+```
+
 ### Planner Notes
 
 - Version 1 focuses on weight loss only.
 - The backend returns BMI together with the calorie plan.
 - The backend returns BMR and activity multiplier so the frontend can explain how maintenance calories were estimated.
 - Version 1 macro guidance returns estimated `protein_g`, `carbs_g`, and `fat_g`.
-- The backend calculates the recommended timeline instead of receiving `timeline_weeks` from the frontend.
+- `desired_timeline_weeks` is optional. The backend should accept it only if the required daily deficit is not too aggressive and target calories do not fall below the safety floor.
+- If the desired timeline is accepted, `recommended_timeline_weeks` can match `desired_timeline_weeks` and `timeline_status` should be `accepted`.
+- `timeline_status` should explain whether the timeline was not provided, accepted, adjusted for being too fast, adjusted for low calories, or accepted as a slow plan.
+- If the desired timeline is not accepted for safety reasons, the backend should still return a safer plan with `success: true`, `recommended_timeline_weeks`, `timeline_status`, and a warning message.
 - Full formulas and references are recorded in `docs/Calorie_Deficit_Planner_Reference.md`.
 - The planner gives estimated guidance only. It should not claim to replace medical or professional health advice.
 

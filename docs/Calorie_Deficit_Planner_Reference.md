@@ -15,7 +15,7 @@ Version 1 focuses on:
 - Estimating the user's current BMI.
 - Estimating the user's daily maintenance calories.
 - Recommending a daily calorie target for weight loss.
-- Calculating a recommended timeline instead of asking the user to enter one.
+- Calculating a recommended timeline, or checking an optional user-provided timeline.
 - Splitting the calorie deficit between diet and exercise based on the user's chosen strategy.
 - Giving basic macronutrient guidance for protein, carbohydrates, and fat.
 
@@ -32,6 +32,9 @@ The planner uses these user inputs:
 - `target_weight_kg`
 - `exercise_habit`
 - `strategy`
+- `desired_timeline_weeks` (optional)
+
+`desired_timeline_weeks` is optional. If the user does not provide it, CutSmart calculates a recommended timeline using the default daily deficit.
 
 ## BMI
 
@@ -102,6 +105,18 @@ active_exercise       -> 1.725
 very_active_exercise  -> 1.9
 ```
 
+These activity multipliers are a simple version 1 estimate of the user's average daily activity level. They do not calculate exact calories burned from each individual workout.
+
+The general idea is based on physical activity level: total daily energy needs can be estimated from BMR and an activity factor. However, the exact values used in version 1 are simplified app assumptions, not a precise clinical measurement.
+
+A future version can improve this by adding daily exercise logging:
+
+```text
+daily_allowed_calories = base_target_calories + extra_exercise_calories_today
+```
+
+This would let users record different exercise on different days instead of relying only on one average `exercise_habit`.
+
 ## Daily Calorie Deficit
 
 CutSmart version 1 starts with a default daily deficit:
@@ -150,7 +165,11 @@ target_calories = maintenance_calories - daily_deficit
 
 ## Recommended Timeline
 
-CutSmart should calculate the timeline for the user instead of asking the user to enter a timeline.
+CutSmart can calculate the timeline automatically from the default deficit plan, but version 1 may also accept an optional `desired_timeline_weeks` from the user.
+
+If the user does not provide `desired_timeline_weeks`, CutSmart uses the default daily deficit to calculate `recommended_timeline_weeks`.
+
+If the user provides `desired_timeline_weeks`, CutSmart checks whether the requested timeline is safe before accepting it.
 
 Simplified estimate:
 
@@ -168,6 +187,36 @@ recommended_timeline_weeks = recommended_timeline_days / 7
 ```
 
 This is an estimate. Real progress can change due to water weight, adherence, metabolism changes, exercise changes, and other lifestyle factors.
+
+### Optional Desired Timeline Check
+
+If the user provides `desired_timeline_weeks`, CutSmart calculates the required daily deficit:
+
+```text
+desired_timeline_days = desired_timeline_weeks * 7
+required_daily_deficit = total_deficit_needed / desired_timeline_days
+requested_target_calories = maintenance_calories - required_daily_deficit
+```
+
+CutSmart accepts the desired timeline only if:
+
+```text
+required_daily_deficit <= 1000
+requested_target_calories >= safety_floor
+```
+
+If the required daily deficit is above 1000 kcal/day, the timeline is considered too fast.
+
+If the requested target calories fall below the safety floor, the timeline is not accepted even if the daily deficit is below 1000 kcal/day.
+
+If the desired timeline is not accepted, CutSmart should return a safer `recommended_timeline_weeks` instead.
+
+If the desired timeline is accepted, CutSmart can set:
+
+```text
+recommended_timeline_weeks = desired_timeline_weeks
+timeline_status = accepted
+```
 
 ## Strategy Split
 
@@ -262,6 +311,22 @@ target_calories <= safety_floor
 
 Response should explain that the plan has reached the minimum calorie safety floor.
 
+Desired timeline too aggressive:
+
+```text
+required_daily_deficit > 1000
+```
+
+Response should warn that the requested timeline is too fast and return a safer recommended timeline.
+
+Desired timeline below safety floor:
+
+```text
+requested_target_calories < safety_floor
+```
+
+Response should warn that the requested timeline would make daily calories too low and return a safer recommended timeline.
+
 ## References
 
 ### BMI
@@ -278,12 +343,31 @@ https://pubmed.ncbi.nlm.nih.gov/2305711/
 
 Used for estimating resting energy expenditure / BMR from weight, height, age, and gender.
 
+### Activity Multiplier
+
+FAO/WHO/UNU Human Energy Requirements  
+https://www.fao.org/4/y5686e/y5686e07.htm
+
+Used to support the general idea that daily energy needs can be estimated using BMR and physical activity level. CutSmart's exact version 1 multipliers are simplified assumptions for a beginner MVP and should be improved in future versions if more detailed activity data is collected.
+
 ### 500 kcal Deficit
 
 MedlinePlus: 10 ways to cut 500 calories a day  
 https://medlineplus.gov/ency/patientinstructions/000892.htm
 
 Used to support 500 kcal/day as a common starting point for weight loss planning.
+
+### Desired Timeline Safety Limit
+
+CDC: Steps for Losing Weight  
+https://www.cdc.gov/healthy-weight-growth/losing-weight/index.html
+
+Used to support gradual weight loss planning. CutSmart uses the common 1 to 2 lb/week guidance as the reason for treating a required deficit above about 1000 kcal/day as too aggressive for version 1.
+
+NHLBI Practical Guide to the Identification, Evaluation, and Treatment of Overweight and Obesity in Adults  
+https://www.nhlbi.nih.gov/files/docs/guidelines/prctgd_c.pdf
+
+Used as additional clinical background for reduced-calorie diet planning in adults with overweight or obesity.
 
 ### Safety Floor
 
