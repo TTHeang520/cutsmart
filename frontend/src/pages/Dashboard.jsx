@@ -22,7 +22,7 @@ function Dashboard() {
         <p className="page-copy">You are logged in to your dashboard.</p>
 
         <div className="dashboard-actions">
-          <Link to="/login">Login page</Link>
+          <Link to="/plan">Create Plan</Link>
           <button type="button" onClick={handleLogout}>
             Logout
           </button>

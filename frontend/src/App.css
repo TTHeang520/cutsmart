@@ -1,5 +1,6 @@
 .auth-page,
-.dashboard-page {
+.dashboard-page,
+.plan-page {
   min-height: 100vh;
   display: flex;
   align-items: center;
@@ -9,9 +10,9 @@
 }
 
 .auth-panel,
-.dashboard-panel {
+.dashboard-panel,
+.plan-shell {
   width: 100%;
-  max-width: 420px;
   padding: 32px;
   border: 1px solid #d9e1ea;
   border-radius: 8px;
@@ -19,9 +20,21 @@
   box-shadow: 0 18px 40px rgba(27, 38, 59, 0.08);
 }
 
+.auth-panel {
+  max-width: 420px;
+}
+
 .dashboard-panel {
   max-width: 560px;
   text-align: center;
+}
+
+.plan-page {
+  align-items: flex-start;
+}
+
+.plan-shell {
+  max-width: 1080px;
 }
 
 .brand-name {
@@ -32,7 +45,8 @@
 }
 
 .auth-panel h1,
-.dashboard-panel h1 {
+.dashboard-panel h1,
+.page-header h1 {
   margin: 0;
   color: #111827;
   font-size: 32px;
@@ -49,7 +63,8 @@
   gap: 16px;
 }
 
-.auth-form label {
+.auth-form label,
+.plan-form label {
   display: grid;
   gap: 7px;
   color: #273449;
@@ -58,7 +73,9 @@
   text-align: left;
 }
 
-.auth-form input {
+.auth-form input,
+.plan-form input,
+.plan-form select {
   width: 100%;
   box-sizing: border-box;
   padding: 12px 14px;
@@ -69,14 +86,19 @@
   font: inherit;
 }
 
-.auth-form input:focus {
+.auth-form input:focus,
+.plan-form input:focus,
+.plan-form select:focus {
   border-color: #2563eb;
   outline: 3px solid rgba(37, 99, 235, 0.15);
 }
 
 .auth-form button,
 .dashboard-actions button,
-.dashboard-actions a {
+.dashboard-actions a,
+.header-actions button,
+.header-actions a,
+.plan-form button {
   min-height: 44px;
   display: inline-flex;
   align-items: center;
@@ -90,13 +112,15 @@
   cursor: pointer;
 }
 
-.auth-form button {
+.auth-form button,
+.plan-form button {
   width: 100%;
   color: #ffffff;
   background: #2563eb;
 }
 
-.auth-form button:disabled {
+.auth-form button:disabled,
+.plan-form button:disabled {
   cursor: not-allowed;
   opacity: 0.7;
 }
@@ -108,6 +132,11 @@
   color: #9f1239;
   background: #fff1f2;
   font-size: 14px;
+}
+
+.form-message.success {
+  color: #166534;
+  background: #ecfdf3;
 }
 
 .auth-link {
@@ -137,14 +166,158 @@
   background: #dc2626;
 }
 
+.page-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  margin-bottom: 28px;
+}
+
+.header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.header-actions a {
+  color: #2563eb;
+  background: #eff6ff;
+}
+
+.header-actions button {
+  color: #ffffff;
+  background: #dc2626;
+}
+
+.plan-layout {
+  display: grid;
+  grid-template-columns: minmax(280px, 380px) 1fr;
+  gap: 24px;
+  align-items: flex-start;
+}
+
+.plan-form,
+.plan-results {
+  border: 1px solid #d9e1ea;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.plan-form {
+  display: grid;
+  gap: 16px;
+  padding: 22px;
+}
+
+.plan-results {
+  min-height: 480px;
+  padding: 22px;
+}
+
+.empty-results {
+  min-height: 432px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  text-align: center;
+}
+
+.empty-results h2,
+.macro-panel h2 {
+  margin: 0 0 10px;
+  color: #111827;
+  font-size: 22px;
+}
+
+.empty-results p {
+  max-width: 420px;
+  margin: 0 auto;
+  color: #5f6b7a;
+}
+
+.plan-warning {
+  margin: 0 0 16px;
+  padding: 12px;
+  border-radius: 6px;
+  color: #92400e;
+  background: #fffbeb;
+}
+
+.result-grid,
+.macro-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.result-item {
+  min-height: 82px;
+  display: grid;
+  align-content: center;
+  gap: 8px;
+  padding: 14px;
+  border: 1px solid #e3e9f0;
+  border-radius: 8px;
+  background: #f8fafc;
+}
+
+.result-item span {
+  color: #64748b;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.result-item strong {
+  color: #111827;
+  font-size: 20px;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+.macro-panel {
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid #d9e1ea;
+}
+
+.macro-list {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
 @media (max-width: 520px) {
   .auth-panel,
-  .dashboard-panel {
+  .dashboard-panel,
+  .plan-shell {
     padding: 24px;
   }
 
   .auth-panel h1,
-  .dashboard-panel h1 {
+  .dashboard-panel h1,
+  .page-header h1 {
     font-size: 28px;
+  }
+}
+
+@media (max-width: 860px) {
+  .page-header,
+  .plan-layout {
+    display: grid;
+  }
+
+  .header-actions {
+    justify-content: flex-start;
+  }
+
+  .plan-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 620px) {
+  .result-grid,
+  .macro-list {
+    grid-template-columns: 1fr;
   }
 }
