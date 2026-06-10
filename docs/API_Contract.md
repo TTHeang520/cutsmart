@@ -215,7 +215,7 @@ Example response shape:
     "estimated_weight_loss_kg_per_week": 0.45,
     "desired_timeline_weeks": 16,
     "recommended_timeline_weeks": 18,
-    "timeline_status": "too_fast_adjusted",
+    "timeline_status": "adjusted",
     "protein_g": 96,
     "carbs_g": 215,
     "fat_g": 53,
