@@ -221,7 +221,12 @@ Example response shape:
     "fat_g": 53,
     "strategy": "balanced",
     "exercise_habit": "light_exercise",
-    "warning": "Requested timeline is too fast. A safer recommended timeline was returned instead."
+    "alternative_plan": {
+      "plan_type": "fastest_safe",
+      "daily_deficit": 960,
+      "recommended_timeline_weeks": 9
+    },
+    "warning": "Requested timeline is too fast. A steady plan was returned with a faster safe option."
   }
 }
 ```
@@ -283,6 +288,7 @@ Invalid desired timeline:
 - If the desired timeline is accepted, `recommended_timeline_weeks` can match `desired_timeline_weeks` and `timeline_status` should be `accepted`.
 - `timeline_status` should explain whether the timeline was not provided, accepted, adjusted for being too fast, adjusted for low calories, or accepted as a slow plan.
 - If the desired timeline is not accepted for safety reasons, the backend should still return a safer plan with `success: true`, `recommended_timeline_weeks`, `timeline_status`, and a warning message.
+- If the desired timeline is too fast but there is a faster safe option than the default plan, the backend may also return `alternative_plan`. The frontend can show this as an optional faster plan later.
 - Full formulas and references are recorded in `docs/Calorie_Deficit_Planner_Reference.md`.
 - The planner gives estimated guidance only. It should not claim to replace medical or professional health advice.
 
