@@ -9,6 +9,7 @@ const startingForm = {
   target_weight_kg: "",
   exercise_habit: "light_exercise",
   strategy: "balanced",
+  desired_timeline_weeks: "",
 };
 
 function Plan() {
@@ -49,6 +50,10 @@ function Plan() {
       exercise_habit: formData.exercise_habit,
       strategy: formData.strategy,
     };
+
+    if (formData.desired_timeline_weeks) {
+      requestBody.desired_timeline_weeks = Number(formData.desired_timeline_weeks);
+    }
 
     try {
       const response = await fetch("http://127.0.0.1:5000/api/plan", {
@@ -196,6 +201,18 @@ function Plan() {
                 <option value="exercise">Exercise focused</option>
                 <option value="balanced">Balanced</option>
               </select>
+            </label>
+
+            <label>
+              Desired timeline (weeks)
+              <input
+                type="number"
+                name="desired_timeline_weeks"
+                min="1"
+                value={formData.desired_timeline_weeks}
+                onChange={handleChange}
+                placeholder="Optional"
+              />
             </label>
 
             {message && (
