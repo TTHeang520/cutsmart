@@ -132,6 +132,10 @@ function Plan() {
       desired_timeline_weeks: Number(formData.desired_timeline_weeks),
     };
 
+    if (formData.desired_timeline_weeks) {
+      requestBody.desired_timeline_weeks = Number(formData.desired_timeline_weeks);
+    }
+
     try {
       const response = await fetch("/api/plan", {
         method: "POST",
