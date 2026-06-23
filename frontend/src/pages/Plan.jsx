@@ -1,5 +1,10 @@
 import { useState } from "react";
 import { Link, Navigate, useNavigate } from "react-router-dom";
+import {
+  calorieCaptions,
+  themeContent,
+  timelineCaptions,
+} from "../data/planThemes";
 
 const totalSteps = 8;
 
@@ -75,6 +80,7 @@ function Plan() {
   const navigate = useNavigate();
   const savedUser = localStorage.getItem("user");
   const user = savedUser ? JSON.parse(savedUser) : null;
+  const [hasStarted, setHasStarted] = useState(false);
   const [formData, setFormData] = useState(startingForm);
   const [currentStep, setCurrentStep] = useState(0);
   const [plan, setPlan] = useState(null);
@@ -96,6 +102,15 @@ function Plan() {
       ...formData,
       [name]: value,
     });
+
+    if (currentStep === 4 || currentStep === 5) {
+      setTimeout(() => {
+        setMessage("");
+        setCurrentStep((step) =>
+          step === currentStep ? Math.min(step + 1, totalSteps - 1) : step
+        );
+      }, 180);
+    }
   }
 
   function handleLogout() {
@@ -189,7 +204,9 @@ function Plan() {
           </div>
         </header>
 
-        {!plan ? (
+        {!hasStarted && !plan ? (
+          <OnboardingCard onStart={() => setHasStarted(true)} />
+        ) : !plan ? (
           <WizardCard
             currentStep={currentStep}
             formData={formData}
@@ -212,11 +229,33 @@ function Plan() {
               setPlan(null);
               setMessage("");
               setCurrentStep(0);
+              setHasStarted(false);
             }}
           />
         )}
       </section>
     </main>
+  );
+}
+
+function OnboardingCard({ onStart }) {
+  return (
+    <section className="onboarding-card">
+      <div className="onboarding-badge">Personal plan builder</div>
+      <div className="onboarding-visual" aria-hidden="true">
+        <span>🍽️</span>
+        <span>＋</span>
+        <span>🏃</span>
+      </div>
+      <h2>Let’s build your CutSmart plan</h2>
+      <p>
+        A personalised calorie and lifestyle plan, built around your body, goal,
+        and routine.
+      </p>
+      <button type="button" onClick={onStart}>
+        Get Started
+      </button>
+    </section>
   );
 }
 
@@ -544,12 +583,15 @@ function ResultReveal({
   onNext,
   onRestart,
 }) {
+  const strategyKey = plan.strategy in themeContent ? plan.strategy : "balanced";
+  const theme = themeContent[strategyKey];
+
   // The result is intentionally revealed in chapters so the plan feels guided.
   const screens = [
     {
-      title: "Your personalized plan is ready.",
-      caption: "Built around your goal, lifestyle, and timeline.",
-      button: "Show my daily target ->",
+      title: theme.title,
+      caption: theme.caption,
+      button: theme.nextButton,
       body: (
         <div className="readiness-panel">
           <span>Ready</span>
@@ -559,8 +601,7 @@ function ResultReveal({
     },
     {
       title: "Your daily target",
-      caption:
-        "This is the number that matters most. Stay close to it consistently and your progress starts here.",
+      caption: calorieCaptions[strategyKey],
       button: "How fast can I get there? ->",
       body: (
         <HeroMetric
@@ -571,8 +612,7 @@ function ResultReveal({
     },
     {
       title: "Your estimated journey",
-      caption:
-        "Slow enough to be sustainable. Fast enough to feel real progress.",
+      caption: timelineCaptions[strategyKey],
       button: "Reveal my strategy ->",
       body: (
         <div className="split-metrics">
@@ -655,22 +695,28 @@ function ResultReveal({
   const isLastScreen = resultStep === screens.length - 1;
 
   return (
-    <section className="result-reveal">
+    <section className={`result-reveal result-theme-${strategyKey}`}>
       <div className="result-step-count">
         Result {resultStep + 1} of {screens.length}
       </div>
 
-      <div className="result-card">
-        <h2>{screen.title}</h2>
-        <p>{screen.caption}</p>
+      <div className="result-card" key={resultStep}>
+        <div className="reveal-item reveal-icon" aria-hidden="true">
+          {theme.icon}
+        </div>
+        <div className="reveal-item reveal-eyebrow">{theme.eyebrow}</div>
+        <h2 className="reveal-item reveal-title">{screen.title}</h2>
+        <p className="reveal-item reveal-caption">{screen.caption}</p>
 
         {plan.warning && (
-          <div className="warning-note">Heads up: {plan.warning}</div>
+          <div className="warning-note reveal-item reveal-body">
+            Heads up: {plan.warning}
+          </div>
         )}
 
-        {screen.body}
+        <div className="reveal-item reveal-body">{screen.body}</div>
 
-        <div className="result-actions">
+        <div className="result-actions reveal-item reveal-button">
           {isLastScreen ? (
             <>
               <button type="button" onClick={onBackToDashboard}>
