@@ -1,3 +1,4 @@
+import json
 import sqlite3
 from pathlib import Path
 
@@ -85,4 +86,81 @@ def get_user_from_email(email):
 
     return user
 
-    
+def save_user_plan(user_id, input_data, plan_result):
+    connection = get_db_connection()
+    cursor = connection.cursor()
+
+    alternative_plan_json = json.dumps(plan_result.get("alternative_plan"))
+
+    cursor.execute(
+        """
+        INSERT INTO user_plans (
+            user_id,
+            age,
+            gender,
+            height_cm,
+            current_weight_kg,
+            target_weight_kg,
+            exercise_habit,
+            strategy,
+            desired_timeline_weeks,
+            current_bmi,
+            current_bmi_category,
+            target_bmi,
+            target_bmi_category,
+            bmr,
+            activity_multiplier,
+            maintenance_calories,
+            target_calories,
+            daily_deficit,
+            diet_deficit,
+            exercise_deficit,
+            estimated_weight_loss_kg_per_week,
+            recommended_timeline_weeks,
+            timeline_status,
+            protein_g,
+            carbs_g,
+            fat_g,
+            alternative_plan,
+            warning
+        )
+        VALUES (
+            ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+            ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+            ?, ?, ?, ?, ?, ?, ?, ?
+        )
+        """,
+        (
+            user_id,
+            input_data["age"],
+            input_data["gender"],
+            input_data["height_cm"],
+            input_data["current_weight_kg"],
+            input_data["target_weight_kg"],
+            input_data["exercise_habit"],
+            input_data["strategy"],
+            input_data.get("desired_timeline_weeks"),
+            plan_result["current_bmi"],
+            plan_result["current_bmi_category"],
+            plan_result["target_bmi"],
+            plan_result["target_bmi_category"],
+            plan_result["bmr"],
+            plan_result["activity_multiplier"],
+            plan_result["maintenance_calories"],
+            plan_result["target_calories"],
+            plan_result["daily_deficit"],
+            plan_result["diet_deficit"],
+            plan_result["exercise_deficit"],
+            plan_result["estimated_weight_loss_kg_per_week"],
+            plan_result["recommended_timeline_weeks"],
+            plan_result["timeline_status"],
+            plan_result["protein_g"],
+            plan_result["carbs_g"],
+            plan_result["fat_g"],
+            alternative_plan_json,
+            plan_result.get("warning")
+        )
+    )
+
+    connection.commit()
+    connection.close()
