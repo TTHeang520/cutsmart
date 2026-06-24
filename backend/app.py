@@ -2,7 +2,7 @@ import sqlite3
 
 from flask import Flask, request
 from flask_cors import CORS
-from database import init_db, create_user, get_user_from_email
+from database import init_db, create_user, get_user_from_email, save_user_plan, get_latest_user_plan
 from planner import generate_plan
 from werkzeug.security import generate_password_hash, check_password_hash
 
@@ -204,3 +204,74 @@ def plan():
 
 if __name__ == "__main__":
     app.run(debug=True)
+
+@app.route("/api/plans/save", methods=["POST"])
+def save_plan():
+    data = request.get_json()
+
+    if data is None:
+        return {
+            "success": False,
+            "message": "Request body must be JSON"
+        }, 400
+
+    user_id = data.get("user_id")
+    input_data = data.get("input_data")
+    plan_result = data.get("plan_result")
+
+    if not user_id or not input_data or not plan_result:
+        return {
+            "success": False,
+            "message": "User id, input data, and plan result are required"
+        }, 400
+
+    required_input_fields = [
+        "age",
+        "gender",
+        "height_cm",
+        "current_weight_kg",
+        "target_weight_kg",
+        "exercise_habit",
+        "strategy"
+    ]
+    
+    required_plan_fields = [
+        "current_bmi",
+        "current_bmi_category",
+        "target_bmi",
+        "target_bmi_category",
+        "bmr",
+        "activity_multiplier",
+        "maintenance_calories",
+        "target_calories",
+        "daily_deficit",
+        "diet_deficit",
+        "exercise_deficit",
+        "estimated_weight_loss_kg_per_week",
+        "recommended_timeline_weeks",
+        "timeline_status",
+        "protein_g",
+        "carbs_g",
+        "fat_g"
+    ]
+
+    for field in required_input_fields:
+        if field not in input_data or input_data[field] in ("", None):
+            return {
+                "success": False,
+                "message": "Input data is missing required fields"
+            }, 400
+
+    for field in required_plan_fields:
+        if field not in plan_result or plan_result[field] in ("", None):
+            return {
+                "success": False,
+                "message": "Plan result is missing required fields"
+            }, 400
+
+    save_user_plan(user_id, input_data, plan_result)
+
+    return {
+        "success": True,
+        "message": "Plan saved successfully"
+    }
