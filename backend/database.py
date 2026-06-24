@@ -164,3 +164,23 @@ def save_user_plan(user_id, input_data, plan_result):
 
     connection.commit()
     connection.close()
+
+def get_latest_user_plan(user_id):
+    connection = get_db_connection()
+    cursor = connection.cursor()
+
+    cursor.execute(
+        """
+        SELECT *
+        FROM user_plans
+        WHERE user_id = ?
+        ORDER BY created_at DESC
+        LIMIT 1
+        """,
+        (user_id,)
+    )
+
+    plan = cursor.fetchone()
+    connection.close()
+
+    return plan
