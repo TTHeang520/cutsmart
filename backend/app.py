@@ -2,7 +2,7 @@ import sqlite3
 
 from flask import Flask, request
 from flask_cors import CORS
-from database import init_db, create_user, get_user_from_email, save_user_plan, get_latest_user_plan
+from database import init_db, create_user, get_user_from_email, save_user_plan
 from planner import generate_plan
 from werkzeug.security import generate_password_hash, check_password_hash
 
@@ -201,10 +201,6 @@ def plan():
         "plan": plan_result
     }
 
-
-if __name__ == "__main__":
-    app.run(debug=True)
-
 @app.route("/api/plans/save", methods=["POST"])
 def save_plan():
     data = request.get_json()
@@ -234,7 +230,7 @@ def save_plan():
         "exercise_habit",
         "strategy"
     ]
-    
+
     required_plan_fields = [
         "current_bmi",
         "current_bmi_category",
@@ -275,3 +271,6 @@ def save_plan():
         "success": True,
         "message": "Plan saved successfully"
     }
+
+if __name__ == "__main__":
+    app.run(debug=True)
