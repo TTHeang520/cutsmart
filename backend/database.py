@@ -6,6 +6,7 @@ DATABASE_NAME = Path(__file__).resolve().parent / "cutsmart_database"
 
 def get_db_connection():
     connection = sqlite3.connect(DATABASE_NAME)
+    connection.row_factory = sqlite3.Row
     return connection
 
 def init_db():
