@@ -1,5 +1,7 @@
 import { useState } from "react";
 import { Link, Navigate, useNavigate } from "react-router-dom";
+import DailyPlanHome from "../components/DailyPlanHome";
+import ExerciseTrack from "../components/ExerciseTrack";
 import {
   calorieCaptions,
   themeContent,
@@ -85,8 +87,10 @@ function Plan() {
   const [currentStep, setCurrentStep] = useState(0);
   const [plan, setPlan] = useState(null);
   const [resultStep, setResultStep] = useState(0);
+  const [dailyView, setDailyView] = useState("result");
   const [message, setMessage] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false);
 
   function handleChange(event) {
     const { name, value } = event.target;
@@ -116,6 +120,16 @@ function Plan() {
   function handleLogout() {
     localStorage.removeItem("user");
     navigate("/login");
+  }
+
+  function handleCreateNewPlan() {
+    setPlan(null);
+    setMessage("");
+    setResultStep(0);
+    setDailyView("result");
+    setCurrentStep(0);
+    setHasStarted(true);
+    setIsAccountMenuOpen(false);
   }
 
   function goNext() {
@@ -171,6 +185,7 @@ function Plan() {
       }
 
       setPlan(data.plan);
+      setDailyView("result");
       setMessage(data.message || "Plan generated successfully");
     } catch {
       setMessage("Could not connect to the server.");
@@ -196,11 +211,36 @@ function Plan() {
             </p>
           </div>
 
-          <div className="header-actions">
-            <Link to="/dashboard">Dashboard</Link>
-            <button type="button" onClick={handleLogout}>
-              Logout
+          <div className="account-area">
+            <button
+              type="button"
+              className="profile-menu-button"
+              onClick={() => setIsAccountMenuOpen(!isAccountMenuOpen)}
+              aria-label="Open account menu"
+              aria-expanded={isAccountMenuOpen}
+            >
+              <span>{getUserInitial(user)}</span>
+              <span className="menu-dots" aria-hidden="true">•••</span>
             </button>
+
+            {isAccountMenuOpen && (
+              <div className="account-menu">
+                <div className="account-menu-user">
+                  <strong>{user.username || "CutSmart user"}</strong>
+                  {user.email && <span>{user.email}</span>}
+                </div>
+
+                <Link to="/dashboard" onClick={() => setIsAccountMenuOpen(false)}>
+                  Dashboard
+                </Link>
+                <button type="button" onClick={handleCreateNewPlan}>
+                  Create new plan
+                </button>
+                <button type="button" className="logout-menu-item" onClick={handleLogout}>
+                  Logout
+                </button>
+              </div>
+            )}
           </div>
         </header>
 
@@ -218,16 +258,38 @@ function Plan() {
             onOptionChange={handleOptionChange}
             onSubmit={handleSubmit}
           />
+        ) : dailyView === "home" ? (
+          <DailyPlanHome
+            plan={plan}
+            theme={getPlanTheme(plan)}
+            onCreateAnotherPlan={handleCreateNewPlan}
+            onOpenExerciseTrack={() => setDailyView("exercise")}
+          />
+        ) : dailyView === "exercise" ? (
+          <ExerciseTrack
+            plan={plan}
+            theme={getPlanTheme(plan)}
+            onBackHome={() => setDailyView("home")}
+          />
         ) : (
           <ResultReveal
             message={message}
             plan={plan}
             resultStep={resultStep}
-            onBackToDashboard={() => navigate("/dashboard")}
+            onFinish={() => setDailyView("home")}
+            onBackToReview={() => {
+              setPlan(null);
+              setResultStep(0);
+              setDailyView("result");
+              setCurrentStep(totalSteps - 1);
+              setHasStarted(true);
+            }}
+            onBackResult={() => setResultStep(Math.max(resultStep - 1, 0))}
             onNext={() => setResultStep(resultStep + 1)}
             onRestart={() => {
               setPlan(null);
               setMessage("");
+              setDailyView("result");
               setCurrentStep(0);
               setHasStarted(false);
             }}
@@ -271,6 +333,7 @@ function WizardCard({
   onSubmit,
 }) {
   const isLastStep = currentStep === totalSteps - 1;
+  const isAutoAdvanceStep = currentStep === 4 || currentStep === 5;
   const canContinue = isStepComplete(currentStep, formData);
   const progress = ((currentStep + 1) / totalSteps) * 100;
 
@@ -313,6 +376,8 @@ function WizardCard({
           <button type="submit" disabled={!canContinue || isLoading}>
             {isLoading ? "Generating..." : "Generate my plan"}
           </button>
+        ) : isAutoAdvanceStep ? (
+          <span className="auto-next-hint">Choose an option to continue</span>
         ) : (
           <button
             type="button"
@@ -450,7 +515,7 @@ function StepContent({ currentStep, formData, onChange, onOptionChange }) {
       <>
         <StepIntro
           title="Choose your style."
-          caption="The best strategy is the one you can repeat on ordinary days."
+          caption="Pick the style you prefer. CutSmart will still keep the final plan realistic and safe."
         />
         <OptionGrid
           name="strategy"
@@ -579,7 +644,9 @@ function ResultReveal({
   message,
   plan,
   resultStep,
-  onBackToDashboard,
+  onFinish,
+  onBackToReview,
+  onBackResult,
   onNext,
   onRestart,
 }) {
@@ -664,28 +731,31 @@ function ResultReveal({
       caption: "Curious how the plan was estimated? Here is the breakdown.",
       button: "Finish",
       body: (
-        <div className="details-grid">
-          <ResultStat
-            label="Current BMI"
-            value={`${formatNumber(plan.current_bmi)} (${plan.current_bmi_category})`}
-          />
-          <ResultStat
-            label="Target BMI"
-            value={`${formatNumber(plan.target_bmi)} (${plan.target_bmi_category})`}
-          />
-          <ResultStat label="BMR" value={`${formatNumber(plan.bmr)} kcal`} />
-          <ResultStat
-            label="Maintenance"
-            value={`${formatNumber(plan.maintenance_calories)} kcal`}
-          />
-          <ResultStat
-            label="Activity multiplier"
-            value={formatNumber(plan.activity_multiplier)}
-          />
-          <ResultStat
-            label="Daily deficit"
-            value={`${formatNumber(plan.daily_deficit)} kcal`}
-          />
+        <div className="details-stack">
+          <PlanComparison plan={plan} />
+          <div className="details-grid">
+            <ResultStat
+              label="Current BMI"
+              value={`${formatNumber(plan.current_bmi)} (${plan.current_bmi_category})`}
+            />
+            <ResultStat
+              label="Target BMI"
+              value={`${formatNumber(plan.target_bmi)} (${plan.target_bmi_category})`}
+            />
+            <ResultStat label="BMR" value={`${formatNumber(plan.bmr)} kcal`} />
+            <ResultStat
+              label="Maintenance"
+              value={`${formatNumber(plan.maintenance_calories)} kcal`}
+            />
+            <ResultStat
+              label="Activity multiplier"
+              value={formatNumber(plan.activity_multiplier)}
+            />
+            <ResultStat
+              label="Daily deficit"
+              value={`${formatNumber(plan.daily_deficit)} kcal`}
+            />
+          </div>
         </div>
       ),
     },
@@ -719,20 +789,67 @@ function ResultReveal({
         <div className="result-actions reveal-item reveal-button">
           {isLastScreen ? (
             <>
-              <button type="button" onClick={onBackToDashboard}>
-                Finish / Back to dashboard
+              <button type="button" onClick={onFinish}>
+                Finish / Open Daily Plan Home
               </button>
               <button type="button" className="secondary-button" onClick={onRestart}>
                 Create another plan
               </button>
             </>
           ) : (
-            <button type="button" onClick={onNext}>
-              {screen.button}
-            </button>
+            <>
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={resultStep === 0 ? onBackToReview : onBackResult}
+              >
+                {resultStep === 0 ? "Back to review" : "Back"}
+              </button>
+              <button type="button" onClick={onNext}>
+                {screen.button}
+              </button>
+            </>
           )}
         </div>
       </div>
+    </section>
+  );
+}
+
+function PlanComparison({ plan }) {
+  return (
+    <section className="plan-comparison">
+      <div>
+        <span className="comparison-eyebrow">Milestone 2 safety check</span>
+        <h3>Preferred style vs safer plan</h3>
+        <p>
+          {plan.warning
+            ? "CutSmart adjusted the plan to keep it realistic and safer for steady progress."
+            : "Your preferred style was accepted, so the plan can stay close to what you chose."}
+        </p>
+      </div>
+
+      <div className="comparison-grid">
+        <ResultStat label="Preferred style" value={formatLabel(plan.strategy)} />
+        <ResultStat
+          label="Timeline status"
+          value={formatLabel(plan.timeline_status)}
+        />
+        <ResultStat
+          label="Recommended timeline"
+          value={`${formatNumber(plan.recommended_timeline_weeks)} weeks`}
+        />
+        <ResultStat
+          label="Desired timeline"
+          value={
+            plan.desired_timeline_weeks
+              ? `${formatNumber(plan.desired_timeline_weeks)} weeks`
+              : "Not provided"
+          }
+        />
+      </div>
+
+      {plan.warning && <div className="comparison-warning">{plan.warning}</div>}
     </section>
   );
 }
@@ -815,6 +932,16 @@ function formatNumber(value) {
   return Number(value).toLocaleString(undefined, {
     maximumFractionDigits: 1,
   });
+}
+
+function getUserInitial(user) {
+  const name = user?.username || user?.email || "U";
+  return name.charAt(0).toUpperCase();
+}
+
+function getPlanTheme(plan) {
+  const strategyKey = plan.strategy in themeContent ? plan.strategy : "balanced";
+  return themeContent[strategyKey];
 }
 
 export default Plan;
