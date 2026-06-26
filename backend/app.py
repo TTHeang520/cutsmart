@@ -1,3 +1,4 @@
+import json
 import sqlite3
 
 from flask import Flask, request
@@ -283,10 +284,15 @@ def latest_plan(user_id):
             "message": "No saved plan found"
         }, 404
 
+    plan_data = dict(plan)
+
+    if plan_data["alternative_plan"] is not None:
+        plan_data["alternative_plan"] = json.loads(plan_data["alternative_plan"])
+
     return {
         "success": True,
         "message": "Latest plan fetched successfully",
-        "plan": dict(plan)
+        "plan": plan_data
     }
 
 

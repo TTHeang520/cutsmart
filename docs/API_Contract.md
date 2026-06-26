@@ -296,7 +296,236 @@ Invalid desired timeline:
 
 - Register and login must use `POST` to get users data.
 - Generate plan must use `POST`.
+- Save plan must use `POST`.
+- Fetch latest saved plan must use `GET`.
 - Send request data as JSON.
 - Use the exact key names shown in this document.
 - `id` is not needed from frontend. The backend creates and returns it.
 - The backend wont return the password or password hash.
+
+## Save Plan
+
+Route:
+
+```text
+POST /api/plans/save
+```
+
+This route saves a generated plan for a logged-in user.
+
+The frontend should call this after `POST /api/plan` returns a successful generated plan.
+
+### Request
+
+Frontend should send JSON with these exact top-level key names:
+
+```json
+{
+  "user_id": 1,
+  "input_data": {
+    "age": 22,
+    "gender": "male",
+    "height_cm": 175,
+    "current_weight_kg": 80,
+    "target_weight_kg": 72,
+    "exercise_habit": "light_exercise",
+    "strategy": "balanced",
+    "desired_timeline_weeks": 16
+  },
+  "plan_result": {
+    "current_bmi": 26.1,
+    "current_bmi_category": "overweight",
+    "target_bmi": 23.5,
+    "target_bmi_category": "normal",
+    "bmr": 1755,
+    "activity_multiplier": 1.375,
+    "maintenance_calories": 2400,
+    "target_calories": 1900,
+    "daily_deficit": 500,
+    "diet_deficit": 300,
+    "exercise_deficit": 200,
+    "estimated_weight_loss_kg_per_week": 0.45,
+    "desired_timeline_weeks": 16,
+    "recommended_timeline_weeks": 18,
+    "timeline_status": "adjusted",
+    "protein_g": 96,
+    "carbs_g": 215,
+    "fat_g": 53,
+    "strategy": "balanced",
+    "exercise_habit": "light_exercise",
+    "alternative_plan": {
+      "plan_type": "fastest_safe",
+      "daily_deficit": 960,
+      "recommended_timeline_weeks": 9
+    },
+    "warning": "Requested timeline is too fast. A steady plan was returned with a faster safe option."
+  }
+}
+```
+
+### Request Field Notes
+
+`user_id` should be the logged-in user's `id` from the login response.
+
+`input_data` should contain the original form data used to generate the plan.
+
+`plan_result` should contain the generated plan returned by `POST /api/plan`.
+
+The backend requires these `input_data` fields:
+
+```text
+age
+gender
+height_cm
+current_weight_kg
+target_weight_kg
+exercise_habit
+strategy
+```
+
+The backend requires these `plan_result` fields:
+
+```text
+current_bmi
+current_bmi_category
+target_bmi
+target_bmi_category
+bmr
+activity_multiplier
+maintenance_calories
+target_calories
+daily_deficit
+diet_deficit
+exercise_deficit
+estimated_weight_loss_kg_per_week
+recommended_timeline_weeks
+timeline_status
+protein_g
+carbs_g
+fat_g
+```
+
+`desired_timeline_weeks`, `alternative_plan`, and `warning` may be empty depending on the generated plan.
+
+### For Success Response
+
+```json
+{
+  "success": true,
+  "message": "Plan saved successfully"
+}
+```
+
+### For Error Responses
+
+Missing JSON body:
+
+```json
+{
+  "success": false,
+  "message": "Request body must be JSON"
+}
+```
+
+Missing top-level data:
+
+```json
+{
+  "success": false,
+  "message": "User id, input data, and plan result are required"
+}
+```
+
+Missing input fields:
+
+```json
+{
+  "success": false,
+  "message": "Input data is missing required fields"
+}
+```
+
+Missing plan result fields:
+
+```json
+{
+  "success": false,
+  "message": "Plan result is missing required fields"
+}
+```
+
+## Fetch Latest Saved Plan
+
+Route:
+
+```text
+GET /api/plans/latest/<user_id>
+```
+
+Example full route:
+
+```text
+http://127.0.0.1:5000/api/plans/latest/1
+```
+
+This route returns the newest saved plan for one user.
+
+The backend uses the saved plan's `created_at` value to sort newest first.
+
+### For Success Response
+
+```json
+{
+  "success": true,
+  "message": "Latest plan fetched successfully",
+  "plan": {
+    "id": 1,
+    "user_id": 1,
+    "age": 22,
+    "gender": "male",
+    "height_cm": 175,
+    "current_weight_kg": 80,
+    "target_weight_kg": 72,
+    "exercise_habit": "light_exercise",
+    "strategy": "balanced",
+    "desired_timeline_weeks": 16,
+    "current_bmi": 26.1,
+    "current_bmi_category": "overweight",
+    "target_bmi": 23.5,
+    "target_bmi_category": "normal",
+    "bmr": 1755,
+    "activity_multiplier": 1.375,
+    "maintenance_calories": 2400,
+    "target_calories": 1900,
+    "daily_deficit": 500,
+    "diet_deficit": 300,
+    "exercise_deficit": 200,
+    "estimated_weight_loss_kg_per_week": 0.45,
+    "recommended_timeline_weeks": 18,
+    "timeline_status": "adjusted",
+    "protein_g": 96,
+    "carbs_g": 215,
+    "fat_g": 53,
+    "alternative_plan": {
+      "plan_type": "fastest_safe",
+      "daily_deficit": 960,
+      "recommended_timeline_weeks": 9
+    },
+    "warning": "Requested timeline is too fast. A steady plan was returned with a faster safe option.",
+    "created_at": "2026-06-24 17:48:30"
+  }
+}
+```
+
+If there is no alternative plan, `alternative_plan` returns `null`.
+
+### For Error Responses
+
+No saved plan:
+
+```json
+{
+  "success": false,
+  "message": "No saved plan found"
+}
+```
