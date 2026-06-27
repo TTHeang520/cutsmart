@@ -849,6 +849,15 @@ function PlanComparison({ plan }) {
         />
       </div>
 
+      {plan.alternative_plan && (
+        <div className="alternative-plan-note">
+          <strong>Fastest safe option:</strong>{" "}
+          {formatNumber(plan.alternative_plan.daily_deficit)} kcal daily deficit
+          for about{" "}
+          {formatNumber(plan.alternative_plan.recommended_timeline_weeks)} weeks.
+        </div>
+      )}
+
       {plan.warning && <div className="comparison-warning">{plan.warning}</div>}
     </section>
   );
