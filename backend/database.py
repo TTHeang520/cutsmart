@@ -231,3 +231,21 @@ def save_weight_log(user_id, weight_kg, logged_date):
     connection.commit()
     connection.close()
         
+def get_weight_history(user_id):
+    connection = get_db_connection()
+    cursor = connection.cursor()
+
+    cursor.execute(
+        """
+        Select *
+        FROM weight_logs
+        WHERE user_id = ?
+        ORDER BY logged_data DESC
+        """,
+        (user_id,)
+    )
+
+    weight_history = cursor.fetchall()
+    connection.close()
+
+    return weight_history
