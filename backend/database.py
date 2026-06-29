@@ -240,7 +240,7 @@ def get_weight_history(user_id):
         Select *
         FROM weight_logs
         WHERE user_id = ?
-        ORDER BY logged_data DESC
+        ORDER BY logged_date DESC
         """,
         (user_id,)
     )
@@ -249,3 +249,23 @@ def get_weight_history(user_id):
     connection.close()
 
     return weight_history
+
+def get_latest_weight(user_id):
+    connection = get_db_connection()
+    cursor = connection.cursor()
+
+    cursor.execute(
+        """
+        Select *
+        FROM weight_logs
+        WHERE user_id = ?
+        ORDER BY logged_date DESC
+        LIMIT 1
+        """,
+        (user_id,)
+    )
+
+    latest_weight = cursor.fetchone()
+    connection.close()
+
+    return latest_weight
