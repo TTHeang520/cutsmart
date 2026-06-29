@@ -108,7 +108,7 @@ def plan():
         "height_cm",
         "current_weight_kg",
         "target_weight_kg",
-        "exercise_habit",
+        "daily_activity_level",
         "strategy"
     ]
 
@@ -116,7 +116,7 @@ def plan():
         if field not in data or data[field] in ("", None):
             return {
                 "success": False,
-                "message": "Age, gender, height, current weight, target weight, exercise habit, and strategy are required"
+                "message": "Age, gender, height, current weight, target weight, daily activity level, and strategy are required"
             }, 400
 
     if data["gender"] not in ["male", "female"]:
@@ -125,18 +125,17 @@ def plan():
             "message": "Invalid gender"
         }, 400
 
-    valid_exercise_habits = [
-        "little_or_no_exercise",
-        "light_exercise",
-        "moderate_exercise",
-        "active_exercise",
-        "very_active_exercise"
+    valid_daily_activity_levels = [
+        "mostly_sitting",
+        "light_daily_movement",
+        "on_feet_often",
+        "physical_daily_routine"
     ]
 
-    if data["exercise_habit"] not in valid_exercise_habits:
+    if data["daily_activity_level"] not in valid_daily_activity_levels:
         return {
             "success": False,
-            "message": "Invalid exercise habit"
+            "message": "Invalid daily activity level"
         }, 400
 
     if data["strategy"] not in ["diet", "exercise", "balanced"]:
@@ -228,7 +227,7 @@ def save_plan():
         "height_cm",
         "current_weight_kg",
         "target_weight_kg",
-        "exercise_habit",
+        "daily_activity_level",
         "strategy"
     ]
 

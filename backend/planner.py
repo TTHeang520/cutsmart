@@ -21,22 +21,17 @@ def calculate_bmr(gender, age, weight_kg, height_cm):
     else:
         return None
     
-def get_activity_multiplier(exercise_habit):
-    if exercise_habit == "little_or_no_exercise" :
-        return 1.2
-    elif exercise_habit == "light_exercise":
-        return 1.375
-    elif exercise_habit == "moderate_exercise":
-        return 1.55
-    elif exercise_habit == "active_exercise":
-        return 1.725
-    elif exercise_habit == "very_active_exercise":
-        return 1.9
-    else:
-        return None
+def get_activity_multiplier(daily_activity_level):
+    activity_multipliers = {
+        "mostly_sitting": 1.2,
+        "light_daily_movement": 1.3,
+        "on_feet_often": 1.4,
+        "physical_daily_routine": 1.5
+    }
+    return activity_multipliers.get(daily_activity_level)
 
-def calculate_maintenance_calories(exercise_habit, bmr):
-    activity_multiplier = get_activity_multiplier(exercise_habit)
+def calculate_maintenance_calories(daily_activity_level, bmr):
+    activity_multiplier = get_activity_multiplier(daily_activity_level)
 
     if activity_multiplier is None:
         return None
@@ -119,7 +114,7 @@ def generate_plan(data):
     height_cm = data["height_cm"]
     current_weight_kg = data["current_weight_kg"]
     target_weight_kg = data["target_weight_kg"]
-    exercise_habit = data["exercise_habit"]
+    daily_activity_level = data["daily_activity_level"]
     strategy = data["strategy"]
     desired_timeline_weeks = data.get("desired_timeline_weeks")
 
@@ -127,8 +122,8 @@ def generate_plan(data):
     target_bmi = calculate_bmi(target_weight_kg, height_cm)
 
     bmr = calculate_bmr(gender, age, current_weight_kg, height_cm)
-    activity_multiplier = get_activity_multiplier(exercise_habit)
-    maintenance_calories = calculate_maintenance_calories(exercise_habit, bmr)
+    activity_multiplier = get_activity_multiplier(daily_activity_level)
+    maintenance_calories = calculate_maintenance_calories(daily_activity_level, bmr)
 
     daily_deficit = calculate_daily_deficit(maintenance_calories, gender)
     timeline_status = "not_provided"
@@ -210,7 +205,7 @@ def generate_plan(data):
         "carbs_g": macros["carbs_g"],
         "fat_g": macros["fat_g"],
         "strategy": strategy,
-        "exercise_habit": exercise_habit,
+        "daily_activity_level": daily_activity_level,
         "alternative_plan": alternative_plan,
         "warning": warning
     }

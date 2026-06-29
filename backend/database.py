@@ -31,7 +31,7 @@ def init_db():
             height_cm REAL NOT NULL,
             current_weight_kg REAL NOT NULL,
             target_weight_kg REAL NOT NULL,
-            exercise_habit TEXT NOT NULL,
+            daily_activity_level TEXT NOT NULL,
             strategy TEXT NOT NULL,
             desired_timeline_weeks REAL,
             current_bmi REAL NOT NULL,
@@ -57,6 +57,14 @@ def init_db():
             FOREIGN KEY (user_id) REFERENCES users (id)
         )
     """)
+
+    columns = {
+        row[1] for row in cursor.execute("PRAGMA table_info(user_plans)").fetchall()
+    }
+    if "exercise_habit" in columns and "daily_activity_level" not in columns:
+        cursor.execute(
+            "ALTER TABLE user_plans RENAME COLUMN exercise_habit TO daily_activity_level"
+        )
 
     connection.commit()
     connection.close()
@@ -102,7 +110,7 @@ def save_user_plan(user_id, input_data, plan_result):
             height_cm,
             current_weight_kg,
             target_weight_kg,
-            exercise_habit,
+            daily_activity_level,
             strategy,
             desired_timeline_weeks,
             current_bmi,
@@ -138,7 +146,7 @@ def save_user_plan(user_id, input_data, plan_result):
             input_data["height_cm"],
             input_data["current_weight_kg"],
             input_data["target_weight_kg"],
-            input_data["exercise_habit"],
+            input_data["daily_activity_level"],
             input_data["strategy"],
             input_data.get("desired_timeline_weeks"),
             plan_result["current_bmi"],

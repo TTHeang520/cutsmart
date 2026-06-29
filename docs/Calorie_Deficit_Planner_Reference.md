@@ -30,7 +30,7 @@ The planner uses these user inputs:
 - `height_cm`
 - `current_weight_kg`
 - `target_weight_kg`
-- `exercise_habit`
+- `daily_activity_level`
 - `strategy`
 - `desired_timeline_weeks` (optional)
 
@@ -95,19 +95,28 @@ Formula:
 maintenance_calories = BMR * activity_multiplier
 ```
 
-For version 1, CutSmart maps `exercise_habit` to an activity multiplier:
+For version 1, CutSmart maps `daily_activity_level` to a conservative activity multiplier:
 
 ```text
-little_or_no_exercise -> 1.2
-light_exercise        -> 1.375
-moderate_exercise     -> 1.55
-active_exercise       -> 1.725
-very_active_exercise  -> 1.9
+mostly_sitting         -> 1.20
+light_daily_movement   -> 1.30
+on_feet_often          -> 1.40
+physical_daily_routine -> 1.50
 ```
 
-These activity multipliers are a simple version 1 estimate of the user's average daily activity level. They do not calculate exact calories burned from each individual workout.
+These levels describe normal daily movement outside planned workouts. Examples include sitting for work or study, commuting, chores, standing, walking during work, and physical job tasks. Planned workouts must not be included when the user chooses this level.
 
-The general idea is based on physical activity level: total daily energy needs can be estimated from BMR and an activity factor. However, the exact values used in version 1 are simplified app assumptions, not a precise clinical measurement.
+The general idea is based on physical activity level: total daily energy needs can be estimated from BMR and an activity factor. The exact version 1 values are conservative app assumptions, not precise clinical measurements. They intentionally exclude planned exercise to avoid counting the same exercise twice.
+
+CutSmart handles planned exercise separately through the user's strategy:
+
+```text
+diet_deficit = daily_deficit * diet_proportion
+exercise_deficit = daily_deficit * exercise_proportion
+target_calories = maintenance_calories - diet_deficit
+```
+
+Therefore, `exercise_deficit` is an exercise calorie target, not an amount already included in `maintenance_calories`.
 
 A future version can improve this by adding daily exercise logging:
 
@@ -115,7 +124,7 @@ A future version can improve this by adding daily exercise logging:
 daily_allowed_calories = base_target_calories + extra_exercise_calories_today
 ```
 
-This would let users record different exercise on different days instead of relying only on one average `exercise_habit`.
+This would let users record different exercise on different days and compare it with the planned `exercise_deficit`.
 
 ## Daily Calorie Deficit
 
@@ -160,8 +169,10 @@ The backend should return a warning explaining that the deficit was reduced beca
 Formula:
 
 ```text
-target_calories = maintenance_calories - daily_deficit
+target_calories = maintenance_calories - diet_deficit
 ```
+
+The remaining part of `daily_deficit` is assigned to planned exercise. Across food and exercise together, the intended total deficit is still `daily_deficit`.
 
 ## Recommended Timeline
 

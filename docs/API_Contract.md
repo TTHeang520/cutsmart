@@ -143,7 +143,7 @@ Frontend should send JSON with these exact key names:
   "height_cm": 175,
   "current_weight_kg": 80,
   "target_weight_kg": 72,
-  "exercise_habit": "light_exercise",
+  "daily_activity_level": "light_daily_movement",
   "strategy": "balanced",
   "desired_timeline_weeks": 16
 }
@@ -162,16 +162,15 @@ female
 
 `height_cm`, `current_weight_kg`, and `target_weight_kg` should be numbers.
 
-`exercise_habit` describes how often or intensely the user usually exercises.
+`daily_activity_level` describes the user's normal movement outside planned workouts.
 
-Suggested exercise habit values:
+Allowed daily activity level values:
 
 ```text
-little_or_no_exercise
-light_exercise
-moderate_exercise
-active_exercise
-very_active_exercise
+mostly_sitting
+light_daily_movement
+on_feet_often
+physical_daily_routine
 ```
 
 `strategy` should be one of:
@@ -206,27 +205,23 @@ Example response shape:
     "target_bmi": 23.5,
     "target_bmi_category": "normal",
     "bmr": 1755,
-    "activity_multiplier": 1.375,
-    "maintenance_calories": 2400,
-    "target_calories": 1900,
-    "daily_deficit": 500,
-    "diet_deficit": 300,
-    "exercise_deficit": 200,
-    "estimated_weight_loss_kg_per_week": 0.45,
+    "activity_multiplier": 1.3,
+    "maintenance_calories": 2325,
+    "target_calories": 1995,
+    "daily_deficit": 550,
+    "diet_deficit": 330,
+    "exercise_deficit": 220,
+    "estimated_weight_loss_kg_per_week": 0.5,
     "desired_timeline_weeks": 16,
-    "recommended_timeline_weeks": 18,
-    "timeline_status": "adjusted",
+    "recommended_timeline_weeks": 16,
+    "timeline_status": "accepted",
     "protein_g": 96,
-    "carbs_g": 215,
-    "fat_g": 53,
+    "carbs_g": 278,
+    "fat_g": 55,
     "strategy": "balanced",
-    "exercise_habit": "light_exercise",
-    "alternative_plan": {
-      "plan_type": "fastest_safe",
-      "daily_deficit": 960,
-      "recommended_timeline_weeks": 9
-    },
-    "warning": "Requested timeline is too fast. A steady plan was returned with a faster safe option."
+    "daily_activity_level": "light_daily_movement",
+    "alternative_plan": null,
+    "warning": null
   }
 }
 ```
@@ -282,6 +277,7 @@ Invalid desired timeline:
 
 - Version 1 focuses on weight loss only.
 - The backend returns BMI together with the calorie plan.
+- The activity multiplier represents normal daily movement outside planned workouts. Planned exercise is returned separately as `exercise_deficit` to avoid double counting.
 - The backend returns BMR and activity multiplier so the frontend can explain how maintenance calories were estimated.
 - Version 1 macro guidance returns estimated `protein_g`, `carbs_g`, and `fat_g`.
 - `desired_timeline_weeks` is optional. The backend should accept it only if the required daily deficit is not too aggressive and target calories do not fall below the safety floor.
@@ -328,7 +324,7 @@ Frontend should send JSON with these exact top-level key names:
     "height_cm": 175,
     "current_weight_kg": 80,
     "target_weight_kg": 72,
-    "exercise_habit": "light_exercise",
+    "daily_activity_level": "light_daily_movement",
     "strategy": "balanced",
     "desired_timeline_weeks": 16
   },
@@ -338,27 +334,23 @@ Frontend should send JSON with these exact top-level key names:
     "target_bmi": 23.5,
     "target_bmi_category": "normal",
     "bmr": 1755,
-    "activity_multiplier": 1.375,
-    "maintenance_calories": 2400,
-    "target_calories": 1900,
-    "daily_deficit": 500,
-    "diet_deficit": 300,
-    "exercise_deficit": 200,
-    "estimated_weight_loss_kg_per_week": 0.45,
+    "activity_multiplier": 1.3,
+    "maintenance_calories": 2325,
+    "target_calories": 1995,
+    "daily_deficit": 550,
+    "diet_deficit": 330,
+    "exercise_deficit": 220,
+    "estimated_weight_loss_kg_per_week": 0.5,
     "desired_timeline_weeks": 16,
-    "recommended_timeline_weeks": 18,
-    "timeline_status": "adjusted",
+    "recommended_timeline_weeks": 16,
+    "timeline_status": "accepted",
     "protein_g": 96,
-    "carbs_g": 215,
-    "fat_g": 53,
+    "carbs_g": 278,
+    "fat_g": 55,
     "strategy": "balanced",
-    "exercise_habit": "light_exercise",
-    "alternative_plan": {
-      "plan_type": "fastest_safe",
-      "daily_deficit": 960,
-      "recommended_timeline_weeks": 9
-    },
-    "warning": "Requested timeline is too fast. A steady plan was returned with a faster safe option."
+    "daily_activity_level": "light_daily_movement",
+    "alternative_plan": null,
+    "warning": null
   }
 }
 ```
@@ -379,7 +371,7 @@ gender
 height_cm
 current_weight_kg
 target_weight_kg
-exercise_habit
+daily_activity_level
 strategy
 ```
 
@@ -486,7 +478,7 @@ The backend uses the saved plan's `created_at` value to sort newest first.
     "height_cm": 175,
     "current_weight_kg": 80,
     "target_weight_kg": 72,
-    "exercise_habit": "light_exercise",
+    "daily_activity_level": "light_daily_movement",
     "strategy": "balanced",
     "desired_timeline_weeks": 16,
     "current_bmi": 26.1,
@@ -494,24 +486,20 @@ The backend uses the saved plan's `created_at` value to sort newest first.
     "target_bmi": 23.5,
     "target_bmi_category": "normal",
     "bmr": 1755,
-    "activity_multiplier": 1.375,
-    "maintenance_calories": 2400,
-    "target_calories": 1900,
-    "daily_deficit": 500,
-    "diet_deficit": 300,
-    "exercise_deficit": 200,
-    "estimated_weight_loss_kg_per_week": 0.45,
-    "recommended_timeline_weeks": 18,
-    "timeline_status": "adjusted",
+    "activity_multiplier": 1.3,
+    "maintenance_calories": 2325,
+    "target_calories": 1995,
+    "daily_deficit": 550,
+    "diet_deficit": 330,
+    "exercise_deficit": 220,
+    "estimated_weight_loss_kg_per_week": 0.5,
+    "recommended_timeline_weeks": 16,
+    "timeline_status": "accepted",
     "protein_g": 96,
-    "carbs_g": 215,
-    "fat_g": 53,
-    "alternative_plan": {
-      "plan_type": "fastest_safe",
-      "daily_deficit": 960,
-      "recommended_timeline_weeks": 9
-    },
-    "warning": "Requested timeline is too fast. A steady plan was returned with a faster safe option.",
+    "carbs_g": 278,
+    "fat_g": 55,
+    "alternative_plan": null,
+    "warning": null,
     "created_at": "2026-06-24 17:48:30"
   }
 }

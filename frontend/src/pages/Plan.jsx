@@ -16,7 +16,7 @@ const startingForm = {
   height_cm: "",
   current_weight_kg: 80,
   target_weight_kg: 72,
-  exercise_habit: "light_exercise",
+  daily_activity_level: "light_daily_movement",
   strategy: "balanced",
   desired_timeline_weeks: "",
 };
@@ -32,31 +32,26 @@ const stepTitles = [
   "Review",
 ];
 
-const exerciseOptions = [
+const dailyActivityOptions = [
   {
-    value: "little_or_no_exercise",
-    title: "Little or no exercise",
-    caption: "Mostly sitting, light daily movement.",
+    value: "mostly_sitting",
+    title: "Mostly sitting",
+    caption: "Most of your day is seated, with only basic movement.",
   },
   {
-    value: "light_exercise",
-    title: "Light exercise",
-    caption: "A few easy sessions or walks each week.",
+    value: "light_daily_movement",
+    title: "Light daily movement",
+    caption: "Mostly seated, with commuting, walking, or regular chores.",
   },
   {
-    value: "moderate_exercise",
-    title: "Moderate exercise",
-    caption: "Consistent training with regular movement.",
+    value: "on_feet_often",
+    title: "On your feet often",
+    caption: "You spend several hours standing or walking most days.",
   },
   {
-    value: "active_exercise",
-    title: "Active exercise",
-    caption: "Hard sessions or a physically active routine.",
-  },
-  {
-    value: "very_active_exercise",
-    title: "Very active exercise",
-    caption: "High activity, frequent intense training.",
+    value: "physical_daily_routine",
+    title: "Physical daily routine",
+    caption: "Your work or routine regularly involves walking, lifting, or carrying.",
   },
 ];
 
@@ -156,7 +151,7 @@ function Plan() {
       height_cm: Number(formData.height_cm),
       current_weight_kg: Number(formData.current_weight_kg),
       target_weight_kg: Number(formData.target_weight_kg),
-      exercise_habit: formData.exercise_habit,
+      daily_activity_level: formData.daily_activity_level,
       strategy: formData.strategy,
       desired_timeline_weeks: Number(formData.desired_timeline_weeks),
     };
@@ -501,9 +496,9 @@ function StepContent({ currentStep, formData, onChange, onOptionChange }) {
           caption="This helps estimate your maintenance calories without overpromising."
         />
         <OptionGrid
-          name="exercise_habit"
-          options={exerciseOptions}
-          selectedValue={formData.exercise_habit}
+          name="daily_activity_level"
+          options={dailyActivityOptions}
+          selectedValue={formData.daily_activity_level}
           onSelect={onOptionChange}
         />
       </>
@@ -570,8 +565,8 @@ function StepContent({ currentStep, formData, onChange, onOptionChange }) {
           value={`${formData.target_weight_kg} kg`}
         />
         <ReviewItem
-          label="Exercise habit"
-          value={formatLabel(formData.exercise_habit)}
+          label="Daily activity"
+          value={formatLabel(formData.daily_activity_level)}
         />
         <ReviewItem label="Strategy" value={formatLabel(formData.strategy)} />
         <ReviewItem
@@ -899,7 +894,7 @@ function isStepComplete(step, formData) {
   }
 
   if (step === 4) {
-    return Boolean(formData.exercise_habit);
+    return Boolean(formData.daily_activity_level);
   }
 
   if (step === 5) {
@@ -917,7 +912,7 @@ function isStepComplete(step, formData) {
     Number(formData.target_weight_kg) > 0 &&
     Number(formData.desired_timeline_weeks) > 0 &&
     Boolean(formData.gender) &&
-    Boolean(formData.exercise_habit) &&
+    Boolean(formData.daily_activity_level) &&
     Boolean(formData.strategy)
   );
 }
