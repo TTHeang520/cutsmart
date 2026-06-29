@@ -1,9 +1,10 @@
 import json
 import sqlite3
+from datetime import date
 
 from flask import Flask, request
 from flask_cors import CORS
-from database import init_db, create_user, get_user_from_email, save_user_plan, get_latest_user_plan
+from database import init_db, create_user, get_user_from_email, save_user_plan, get_latest_user_plan, save_weight_log, get_weight_history, get_latest_weight
 from planner import generate_plan
 from werkzeug.security import generate_password_hash, check_password_hash
 
@@ -294,6 +295,72 @@ def latest_plan(user_id):
         "plan": plan_data
     }
 
+@app.route("/api/weights", methods=["POST"])
+def create_weight_log():
+    data = request.get_json()
+
+    if data is None:
+        return {
+            "success": False,
+            "message": "Request body must be JSON"
+        }, 400
+    
+    user_id = data.get("user_id")
+    weight_kg = data.get("weight_kg")
+    logged_date = data.get("logged_date")
+
+    if user_id in ("", None) or weight_kg in ("", None) or not logged_date:
+        return {
+            "success": False,
+            "message": "User id, weight, and logged date are required"
+        }, 400
+
+    try:
+        user_id = int(user_id)
+        weight_kg = float(weight_kg)
+    except (TypeError, ValueError):
+        return {
+            "success": False,
+            "message": "User id and weight must be numbers"
+        }, 400
+
+    if user_id <= 0 or weight_kg <= 0:
+        return {
+            "success": False,
+            "message": "User id and weight must be positive"
+        }, 400
+
+    try:
+        parsed_date = date.fromisoformat(logged_date)
+    except (TypeError, ValueError):
+        return {
+            "success": False,
+            "message": "Logged date must be a real date in YYYY-MM-DD format"
+        }, 400
+
+    if parsed_date.isoformat() != logged_date:
+        return {
+            "success": False,
+            "message": "Logged date must use YYYY-MM-DD format"
+        }, 400
+
+    try:
+        save_weight_log(user_id, weight_kg, logged_date)
+    except sqlite3.IntegrityError:
+        return {
+            "success": False,
+            "message": "User not found"
+        }, 404
+
+    return {
+        "success": True,
+        "message": "Weight recorded successfully",
+        "weight": {
+            "user_id": user_id,
+            "weight_kg": weight_kg,
+            "logged_date": logged_date
+        }
+    }
 
 if __name__ == "__main__":
     app.run(debug=True)
