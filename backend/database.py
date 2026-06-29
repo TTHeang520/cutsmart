@@ -7,6 +7,7 @@ DATABASE_NAME = Path(__file__).resolve().parent / "cutsmart_database"
 def get_db_connection():
     connection = sqlite3.connect(DATABASE_NAME)
     connection.row_factory = sqlite3.Row
+    connection.execute("PRAGMA foreign_keys = ON")
     return connection
 
 def init_db():
@@ -207,4 +208,26 @@ def get_latest_user_plan(user_id):
 
     return plan
 
+def save_weight_log(user_id, weight_kg, logged_date):
+    connection = get_db_connection()
+    cursor = connection.cursor()
 
+    cursor.execute(
+        """
+        INSERT INTO weight_logs (
+            user_id,
+            weight_kg,
+            logged_date
+        )
+        VALUES (?, ?, ?)
+        ON CONFLICT(user_id, logged_date)
+        DO UPDATE SET
+            weight_kg = excluded.weight_kg,
+            updated_at = CURRENT_TIMESTAMP
+        """,
+        (user_id, weight_kg, logged_date)
+    )
+
+    connection.commit()
+    connection.close()
+        
