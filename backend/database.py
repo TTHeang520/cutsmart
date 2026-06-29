@@ -66,6 +66,19 @@ def init_db():
             "ALTER TABLE user_plans RENAME COLUMN exercise_habit TO daily_activity_level"
         )
 
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS weight_logs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        weight_kg REAL NOT NULL,
+        logged_date TEXT NOT NULL,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users (id),
+        UNIQUE (user_id, logged_date)
+    )
+    """)
+
     connection.commit()
     connection.close()
 
@@ -193,3 +206,5 @@ def get_latest_user_plan(user_id):
     connection.close()
 
     return plan
+
+
