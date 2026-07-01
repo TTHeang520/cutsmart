@@ -80,6 +80,26 @@ def init_db():
     )
     """)
 
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS food_logs(
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        food_name TEXT NOT NULL,
+        calories REAL NOT NULL,
+        meal_type TEXT NOT NULL,
+        logged_date TEXT NOT NULL,
+        logged_time TEXT NOT NULL,
+        protein_g REAL,
+        carbs_g REAL,
+        fat_g REAL,
+        notes TEXT,
+        photo_path TEXT,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users (id)
+    )      
+    """)
+
     connection.commit()
     connection.close()
 
@@ -250,6 +270,24 @@ def get_weight_history(user_id):
 
     return weight_history
 
+def get_weight_by_date(user_id, logged_date):
+    connection = get_db_connection()
+    cursor = connection.cursor()
+
+    cursor.execute(
+        """
+        SELECT *
+        FROM weight_logs
+        WHERE user_id = ? AND logged_date = ?
+        """,
+        (user_id, logged_date)
+    )
+
+    weight = cursor.fetchone()
+    connection.close()
+
+    return weight
+
 def get_latest_weight(user_id):
     connection = get_db_connection()
     cursor = connection.cursor()
@@ -269,3 +307,80 @@ def get_latest_weight(user_id):
     connection.close()
 
     return latest_weight
+
+def save_food_log(user_id, food_data):
+    connection = get_db_connection()
+    cursor = connection.cursor()
+
+    cursor.execute(
+        """
+        INSERT INTO food_logs (
+            user_id,
+            food_name,
+            calories,
+            meal_type,
+            logged_date,
+            logged_time,
+            protein_g,
+            carbs_g,
+            fat_g,
+            notes,
+            photo_path
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            user_id,
+            food_data["food_name"],
+            food_data["calories"],
+            food_data["meal_type"],
+            food_data["logged_date"],
+            food_data["logged_time"],
+            food_data.get("protein_g"),
+            food_data.get("carbs_g"),
+            food_data.get("fat_g"),
+            food_data.get("notes"),
+            food_data.get("photo_path")
+        )
+    )
+
+    connection.commit()
+    connection.close()
+
+def get_food_history(user_id):
+    connection = get_db_connection()
+    cursor = connection.cursor()
+
+    cursor.execute(
+        """
+        SELECT *
+        FROM food_logs
+        WHERE user_id = ?
+        ORDER BY logged_date DESC, logged_time DESC, id DESC
+        """,
+        (user_id,)
+    )
+
+    food_history = cursor.fetchall()
+    connection.close()
+
+    return food_history
+
+def get_food_logs_by_date(user_id, logged_date):
+    connection = get_db_connection()
+    cursor = connection.cursor()
+
+    cursor.execute(
+        """
+        SELECT *
+        FROM food_logs
+        WHERE user_id = ? AND logged_date = ?
+        ORDER BY logged_time ASC, id ASC
+        """,
+        (user_id, logged_date)
+    )
+
+    food_logs = cursor.fetchall()
+    connection.close()
+
+    return food_logs
