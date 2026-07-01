@@ -270,24 +270,6 @@ def get_weight_history(user_id):
 
     return weight_history
 
-def get_weight_by_date(user_id, logged_date):
-    connection = get_db_connection()
-    cursor = connection.cursor()
-
-    cursor.execute(
-        """
-        SELECT *
-        FROM weight_logs
-        WHERE user_id = ? AND logged_date = ?
-        """,
-        (user_id, logged_date)
-    )
-
-    weight = cursor.fetchone()
-    connection.close()
-
-    return weight
-
 def get_latest_weight(user_id):
     connection = get_db_connection()
     cursor = connection.cursor()
@@ -307,6 +289,24 @@ def get_latest_weight(user_id):
     connection.close()
 
     return latest_weight
+
+def get_weight_by_date(user_id, logged_date):
+    connection = get_db_connection()
+    cursor = connection.cursor()
+
+    cursor.execute(
+        """
+        SELECT *
+        FROM weight_logs
+        WHERE user_id = ? AND logged_date = ?
+        """,
+        (user_id, logged_date)
+    )
+
+    weight = cursor.fetchone()
+    connection.close()
+
+    return weight
 
 def save_food_log(user_id, food_data):
     connection = get_db_connection()
