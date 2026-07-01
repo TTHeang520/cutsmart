@@ -517,3 +517,196 @@ No saved plan:
   "message": "No saved plan found"
 }
 ```
+
+## Weight Log
+
+Weight Log allows a registered user to record body weight by date.
+
+A user can have one weight record per date. Sending another weight for the same user and date updates the existing record.
+
+## Create Or Update Weight
+
+Route:
+
+```text
+POST /api/weights
+```
+
+### Request
+
+```json
+{
+  "user_id": 1,
+  "weight_kg": 77.9,
+  "logged_date": "2026-06-30"
+}
+```
+
+### Request Field Notes
+
+`user_id` must be the logged-in user's ID.
+
+`weight_kg` must be a positive number.
+
+`logged_date` must be a real date using `YYYY-MM-DD` format.
+
+If the user already has a weight record for that date, the backend updates its `weight_kg` and `updated_at` values.
+
+### For Success Response
+
+```json
+{
+  "success": true,
+  "message": "Weight recorded successfully",
+  "weight": {
+    "user_id": 1,
+    "weight_kg": 77.9,
+    "logged_date": "2026-06-30"
+  }
+}
+```
+
+### For Error Responses
+
+Missing fields:
+
+```json
+{
+  "success": false,
+  "message": "User id, weight, and logged date are required"
+}
+```
+
+Invalid number:
+
+```json
+{
+  "success": false,
+  "message": "User id and weight must be numbers"
+}
+```
+
+Invalid positive value:
+
+```json
+{
+  "success": false,
+  "message": "User id and weight must be positive"
+}
+```
+
+Invalid or nonexistent date:
+
+```json
+{
+  "success": false,
+  "message": "Logged date must be a real date in YYYY-MM-DD format"
+}
+```
+
+Incorrect date formatting:
+
+```json
+{
+  "success": false,
+  "message": "Logged date must use YYYY-MM-DD format"
+}
+```
+
+User not found:
+
+```json
+{
+  "success": false,
+  "message": "User not found"
+}
+```
+
+## Fetch Weight History
+
+Route:
+
+```text
+GET /api/weights/history/<user_id>
+```
+
+Example full route:
+
+```text
+http://127.0.0.1:5000/api/weights/history/1
+```
+
+This route returns all weight records belonging to one user, ordered by `logged_date` from newest to oldest.
+
+### For Success Response
+
+```json
+{
+  "success": true,
+  "message": "Weight history fetched successfully",
+  "history": [
+    {
+      "id": 11,
+      "user_id": 1,
+      "weight_kg": 77.9,
+      "logged_date": "2026-06-30",
+      "created_at": "2026-07-01 13:19:50",
+      "updated_at": "2026-07-01 13:24:22"
+    }
+  ]
+}
+```
+
+If there are no records, the request still succeeds and returns an empty list:
+
+```json
+{
+  "success": true,
+  "message": "Weight history fetched successfully",
+  "history": []
+}
+```
+
+## Fetch Latest Weight
+
+Route:
+
+```text
+GET /api/weights/latest/<user_id>
+```
+
+Example full route:
+
+```text
+http://127.0.0.1:5000/api/weights/latest/1
+```
+
+This route returns the user's newest weight record according to `logged_date`.
+
+### For Success Response
+
+```json
+{
+  "success": true,
+  "message": "Latest weight fetched successfully",
+  "latest": {
+    "id": 11,
+    "user_id": 1,
+    "weight_kg": 77.9,
+    "logged_date": "2026-06-30",
+    "created_at": "2026-07-01 13:19:50",
+    "updated_at": "2026-07-01 13:24:22"
+  }
+}
+```
+
+### For Error Responses
+
+No weight record found:
+
+```json
+{
+  "success": false,
+  "message": "No weight found"
+}
+```
