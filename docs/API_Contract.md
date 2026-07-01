@@ -706,7 +706,7 @@ No weight record found:
 
 ```json
 {
-  "success": false,
+  "success": False,
   "message": "No weight found"
 }
 ```
