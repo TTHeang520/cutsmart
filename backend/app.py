@@ -362,5 +362,31 @@ def create_weight_log():
         }
     }
 
+@app.route("/api/weights/history/<int:user_id>", methods=["GET"])
+def weight_history(user_id):
+    history = get_weight_history(user_id)
+    
+    return {
+        "success": True,
+        "message": "Weight history fetched successfully",
+        "history": [dict(row) for row in history]
+    }
+
+@app.route("/api/weights/latest/<int:user_id>", methods=["GET"])
+def latest_weight(user_id):
+    latest = get_latest_weight(user_id)
+
+    if latest is None:
+        return {
+            "success": False,
+            "message": "No weight found"
+        }, 404
+    
+    return {
+        "success": True,
+        "message": "Latest weight fetched successfully",
+        "latest": dict(latest)
+    }
+
 if __name__ == "__main__":
     app.run(debug=True)
