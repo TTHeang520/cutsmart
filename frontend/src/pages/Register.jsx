@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import "./Login.css";
 
 function Register() {
   const navigate = useNavigate();
@@ -39,56 +40,94 @@ function Register() {
   }
 
   return (
-    <main className="auth-page">
-      <section className="auth-panel">
-        <p className="brand-name">CutSmart</p>
-        <h1>Register</h1>
-        <p className="page-copy">Create your account to get started.</p>
+    <main className="login-page">
+      <section className="login-brand-panel" aria-label="CutSmart overview">
+        <div className="login-brand-content">
+          <div className="login-logo-mark" aria-hidden="true">
+            CS
+          </div>
+          <div>
+            <p className="login-kicker">CutSmart</p>
+            <h1>Build healthier habits every day.</h1>
+          </div>
 
-        <form onSubmit={handleSubmit} className="auth-form">
-          <label>
-            Username
-            <input
-              type="text"
-              value={username}
-              onChange={(event) => setUsername(event.target.value)}
-              placeholder="Choose a username"
-              required
-            />
-          </label>
+          <div className="login-feature-list">
+            <div className="login-feature-item">
+              <span aria-hidden="true">01</span>
+              <strong>Smart calorie planning</strong>
+            </div>
+            <div className="login-feature-item">
+              <span aria-hidden="true">02</span>
+              <strong>Workout tracking</strong>
+            </div>
+            <div className="login-feature-item">
+              <span aria-hidden="true">03</span>
+              <strong>Progress insights</strong>
+            </div>
+          </div>
+        </div>
 
-          <label>
-            Email
-            <input
-              type="email"
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
-              placeholder="you@example.com"
-              required
-            />
-          </label>
+        <p className="login-copyright">© 2026 CutSmart. All rights reserved.</p>
+      </section>
 
-          <label>
-            Password
-            <input
-              type="password"
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              placeholder="Create a password"
-              required
-            />
-          </label>
+      <section className="login-card-panel" aria-label="Register form">
+        <div className="login-card">
+          <div className="login-card-header">
+            <p className="login-card-eyebrow">Start Smart</p>
+            <h2>Register</h2>
+            <p>Create your CutSmart account and begin your healthier routine.</p>
+          </div>
 
-          {message && <p className="form-message">{message}</p>}
+          <form onSubmit={handleSubmit} className="login-form">
+            <label>
+              Username
+              <input
+                type="text"
+                value={username}
+                onChange={(event) => setUsername(event.target.value)}
+                placeholder="Choose a username"
+                required
+              />
+            </label>
 
-          <button type="submit" disabled={isLoading}>
-            {isLoading ? "Creating account..." : "Register"}
-          </button>
-        </form>
+            <label>
+              Email
+              <input
+                type="email"
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+                placeholder="you@example.com"
+                required
+              />
+            </label>
 
-        <p className="auth-link">
-          Already have an account? <Link to="/login">Login</Link>
-        </p>
+            <label>
+              Password
+              <input
+                type="password"
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                placeholder="Create a password"
+                required
+              />
+            </label>
+
+            <div className="login-form-row">
+              <span>Private by default</span>
+              <span>Fitness-ready</span>
+            </div>
+
+            {message && <p className="login-message">{message}</p>}
+
+            <button type="submit" disabled={isLoading}>
+              {isLoading ? "Creating account..." : "Register"}
+            </button>
+          </form>
+
+          <p className="login-register-link">
+            Already have an account? <Link to="/login">Login</Link>
+          </p>
+        </div>
       </section>
     </main>
   );

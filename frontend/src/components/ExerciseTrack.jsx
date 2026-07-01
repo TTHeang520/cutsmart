@@ -1,4 +1,6 @@
 import { useMemo, useState } from "react";
+import CompanionMascot from "./CompanionMascot";
+import ThemeDecorations from "./ThemeDecorations";
 import { exerciseOptions } from "../data/exerciseOptions";
 
 const categoryFilters = ["All", "Cardio", "Sport", "Strength", "Recovery"];
@@ -46,6 +48,7 @@ function ExerciseTrack({ plan, theme, onBackHome }) {
   return (
     <section className={`exercise-track daily-theme-${plan.strategy}`}>
       <div className="exercise-header">
+        <ThemeDecorations decorations={theme.decorations} />
         <button type="button" className="secondary-button" onClick={onBackHome}>
           Back to Daily Plan Home
         </button>
@@ -58,6 +61,11 @@ function ExerciseTrack({ plan, theme, onBackHome }) {
             and start with the suggested duration.
           </p>
         </div>
+        <CompanionMascot
+          companionKey={theme.companionKey}
+          progressPercent={55}
+          size="medium"
+        />
       </div>
 
       {selectedExercise && (
