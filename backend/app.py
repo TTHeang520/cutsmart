@@ -593,11 +593,17 @@ def foods_by_date(user_id):
 
     food_logs = get_food_logs_by_date(user_id, logged_date)
 
+    total_calories = sum(row["calories"] for row in food_logs)
+
     return {
         "success": True,
         "message": "Food logs fetched successfully",
         "date": logged_date,
-        "foods": [dict(row) for row in food_logs]
+        "foods": [dict(row) for row in food_logs],
+        "summary": {
+            "entry_count": len(food_logs),
+            "total_calories": total_calories
+        }
     }
 
 if __name__ == "__main__":
