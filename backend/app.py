@@ -4,7 +4,7 @@ from datetime import date, time
 
 from flask import Flask, request
 from flask_cors import CORS
-from database import init_db, create_user, get_user_from_email, save_user_plan, get_latest_user_plan, save_weight_log, get_weight_history, get_weight_by_date, get_latest_weight, save_food_log, get_food_history, get_food_logs_by_date
+from database import init_db, create_user, get_user_from_email, save_user_plan, get_latest_user_plan, save_weight_log, get_weight_history, get_weight_by_date, get_latest_weight, save_food_log, get_food_history, get_food_logs_by_date, update_food_log, delete_food_log
 from planner import generate_plan
 from werkzeug.security import generate_password_hash, check_password_hash
 
@@ -604,6 +604,174 @@ def foods_by_date(user_id):
             "entry_count": len(food_logs),
             "total_calories": total_calories
         }
+    }
+
+@app.route("/api/foods/<int:food_id>", methods=["PUT"])
+def update_food_entry(food_id):
+    data = request.get_json()
+
+    if data is None:
+        return {
+            "success": False,
+            "message": "Request body must be JSON"
+        }, 400
+
+    required_fields = [
+        "user_id",
+        "food_name",
+        "calories",
+        "meal_type",
+        "logged_date",
+        "logged_time"
+    ]
+
+    for field in required_fields:
+        if field not in data or data[field] in ("", None):
+            return {
+                "success": False,
+                "message": "User id, food name, calories, meal type, date, and time are required"
+            }, 400
+
+    try:
+        user_id = int(data["user_id"])
+        data["calories"] = float(data["calories"])
+    except (TypeError, ValueError):
+        return {
+            "success": False,
+            "message": "User id and calories must be numbers"
+        }, 400
+
+    if user_id <= 0 or data["calories"] <= 0:
+        return {
+            "success": False,
+            "message": "User id and calories must be positive"
+        }, 400
+
+    valid_meal_types = ["breakfast", "lunch", "dinner", "snack"]
+
+    if data["meal_type"] not in valid_meal_types:
+        return {
+            "success": False,
+            "message": "Invalid meal type"
+        }, 400
+
+    try:
+        parsed_date = date.fromisoformat(data["logged_date"])
+    except (TypeError, ValueError):
+        return {
+            "success": False,
+            "message": "Logged date must be a real date in YYYY-MM-DD format"
+        }, 400
+
+    if parsed_date.isoformat() != data["logged_date"]:
+        return {
+            "success": False,
+            "message": "Logged date must use YYYY-MM-DD format"
+        }, 400
+
+    try:
+        parsed_time = time.fromisoformat(data["logged_time"])
+    except (TypeError, ValueError):
+        return {
+            "success": False,
+            "message": "Logged time must be a real time in HH:MM format"
+        }, 400
+
+    if parsed_time.strftime("%H:%M") != data["logged_time"]:
+        return {
+            "success": False,
+            "message": "Logged time must use HH:MM format"
+        }, 400
+
+    optional_macros = ["protein_g", "carbs_g", "fat_g"]
+
+    try:
+        for field in optional_macros:
+            if data.get(field) in ("", None):
+                data[field] = None
+            else:
+                data[field] = float(data[field])
+
+                if data[field] < 0:
+                    return {
+                        "success": False,
+                        "message": "Macro values cannot be negative"
+                    }, 400
+    except (TypeError, ValueError):
+        return {
+            "success": False,
+            "message": "Macro values must be numbers"
+        }, 400
+
+    updated_rows = update_food_log(food_id, user_id, data)
+
+    if updated_rows == 0:
+        return {
+            "success": False,
+            "message": "Food entry not found"
+        }, 404
+
+    return {
+        "success": True,
+        "message": "Food entry updated successfully",
+        "food": {
+            "id": food_id,
+            "user_id": user_id,
+            "food_name": data["food_name"],
+            "calories": data["calories"],
+            "meal_type": data["meal_type"],
+            "logged_date": data["logged_date"],
+            "logged_time": data["logged_time"],
+            "protein_g": data.get("protein_g"),
+            "carbs_g": data.get("carbs_g"),
+            "fat_g": data.get("fat_g"),
+            "notes": data.get("notes")
+        }
+    }
+
+@app.route("/api/foods/<int:food_id>", methods=["DELETE"])
+def delete_food_entry(food_id):
+    data = request.get_json()
+
+    if data is None:
+        return {
+            "success": False,
+            "message": "Request body must be JSON"
+        }, 400
+
+    user_id = data.get("user_id")
+
+    if user_id in ("", None):
+        return {
+            "success": False,
+            "message": "User id is required"
+        }, 400
+
+    try:
+        user_id = int(user_id)
+    except (TypeError, ValueError):
+        return {
+            "success": False,
+            "message": "User id must be a number"
+        }, 400
+
+    if user_id <= 0:
+        return {
+            "success": False,
+            "message": "User id must be positive"
+        }, 400
+
+    deleted_rows = delete_food_log(food_id, user_id)
+
+    if deleted_rows == 0:
+        return {
+            "success": False,
+            "message": "Food entry not found"
+        }, 404
+
+    return {
+        "success": True,
+        "message": "Food entry deleted successfully"
     }
 
 if __name__ == "__main__":

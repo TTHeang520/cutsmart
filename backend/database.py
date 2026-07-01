@@ -384,3 +384,65 @@ def get_food_logs_by_date(user_id, logged_date):
     connection.close()
 
     return food_logs
+
+def update_food_log(food_id, user_id, food_data):
+    connection = get_db_connection()
+    cursor = connection.cursor()
+
+    cursor.execute(
+        """
+        UPDATE food_logs
+        SET
+            food_name = ?,
+            calories = ?,
+            meal_type = ?,
+            logged_date = ?,
+            logged_time = ?,
+            protein_g = ?,
+            carbs_g = ?,
+            fat_g = ?,
+            notes = ?,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = ? AND user_id = ?
+        """,
+        (
+            food_data["food_name"],
+            food_data["calories"],
+            food_data["meal_type"],
+            food_data["logged_date"],
+            food_data["logged_time"],
+            food_data.get("protein_g"),
+            food_data.get("carbs_g"),
+            food_data.get("fat_g"),
+            food_data.get("notes"),
+            food_id,
+            user_id
+        )
+    )
+
+    updated_rows = cursor.rowcount
+    connection.commit()
+    connection.close()
+
+    return updated_rows
+
+def delete_food_log(food_id, user_id):
+    connection = get_db_connection()
+    cursor = connection.cursor()
+
+    cursor.execute(
+        """
+        DELETE FROM food_logs
+        WHERE id = ? AND user_id = ?
+        """,
+        (
+            food_id,
+            user_id
+        )
+    )
+
+    deleted_rows = cursor.rowcount
+    connection.commit()
+    connection.close()
+
+    return deleted_rows
