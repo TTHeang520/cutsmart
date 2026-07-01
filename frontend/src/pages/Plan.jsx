@@ -1,7 +1,6 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, Navigate, useNavigate } from "react-router-dom";
-import DailyPlanHome from "../components/DailyPlanHome";
-import ExerciseTrack from "../components/ExerciseTrack";
+import CompanionMascot from "../components/CompanionMascot";
 import {
   calorieCaptions,
   themeContent,
@@ -77,15 +76,54 @@ function Plan() {
   const navigate = useNavigate();
   const savedUser = localStorage.getItem("user");
   const user = savedUser ? JSON.parse(savedUser) : null;
-  const [hasStarted, setHasStarted] = useState(false);
+  const userId = user?.id;
+  const savedPlan = getStoredLatestPlan(user);
+  const [hasStarted, setHasStarted] = useState(Boolean(savedPlan));
   const [formData, setFormData] = useState(startingForm);
   const [currentStep, setCurrentStep] = useState(0);
-  const [plan, setPlan] = useState(null);
+  const [plan, setPlan] = useState(savedPlan);
   const [resultStep, setResultStep] = useState(0);
-  const [dailyView, setDailyView] = useState("result");
+  const [planView, setPlanView] = useState(savedPlan ? "summary" : "result");
   const [message, setMessage] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [isCheckingSavedPlan, setIsCheckingSavedPlan] = useState(Boolean(userId && !savedPlan));
   const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false);
+
+  useEffect(() => {
+    if (!userId || plan) {
+      return;
+    }
+
+    let isCurrent = true;
+
+    async function fetchLatestPlan() {
+      try {
+        const response = await fetch(`/api/plans/latest/${userId}`);
+        const data = await response.json();
+
+        if (!isCurrent || !response.ok || data.success === false || !data.plan) {
+          return;
+        }
+
+        localStorage.setItem(getLatestPlanKey({ id: userId }), JSON.stringify(data.plan));
+        setPlan(data.plan);
+        setHasStarted(true);
+        setPlanView("summary");
+      } catch {
+        // Existing localStorage fallback already ran during initial state setup.
+      } finally {
+        if (isCurrent) {
+          setIsCheckingSavedPlan(false);
+        }
+      }
+    }
+
+    fetchLatestPlan();
+
+    return () => {
+      isCurrent = false;
+    };
+  }, [userId, plan]);
 
   function handleChange(event) {
     const { name, value } = event.target;
@@ -119,9 +157,10 @@ function Plan() {
 
   function handleCreateNewPlan() {
     setPlan(null);
+    setFormData(startingForm);
     setMessage("");
     setResultStep(0);
-    setDailyView("result");
+    setPlanView("result");
     setCurrentStep(0);
     setHasStarted(true);
     setIsAccountMenuOpen(false);
@@ -180,7 +219,9 @@ function Plan() {
       }
 
       setPlan(data.plan);
-      setDailyView("result");
+      localStorage.setItem(getLatestPlanKey(user), JSON.stringify(data.plan));
+      await saveGeneratedPlan(user, requestBody, data.plan);
+      setPlanView("result");
       setMessage(data.message || "Plan generated successfully");
     } catch {
       setMessage("Could not connect to the server.");
@@ -229,7 +270,7 @@ function Plan() {
                   Dashboard
                 </Link>
                 <button type="button" onClick={handleCreateNewPlan}>
-                  Create new plan
+                  Create New Plan
                 </button>
                 <button type="button" className="logout-menu-item" onClick={handleLogout}>
                   Logout
@@ -239,7 +280,13 @@ function Plan() {
           </div>
         </header>
 
-        {!hasStarted && !plan ? (
+        {isCheckingSavedPlan ? (
+          <section className="onboarding-card">
+            <div className="onboarding-badge">Checking saved plan</div>
+            <h2>Loading your CutSmart plan</h2>
+            <p>We are checking whether you already have a saved plan.</p>
+          </section>
+        ) : !hasStarted && !plan ? (
           <OnboardingCard onStart={() => setHasStarted(true)} />
         ) : !plan ? (
           <WizardCard
@@ -253,29 +300,21 @@ function Plan() {
             onOptionChange={handleOptionChange}
             onSubmit={handleSubmit}
           />
-        ) : dailyView === "home" ? (
-          <DailyPlanHome
+        ) : planView === "summary" ? (
+          <PlanSummary
             plan={plan}
-            theme={getPlanTheme(plan)}
-            onCreateAnotherPlan={handleCreateNewPlan}
-            onOpenExerciseTrack={() => setDailyView("exercise")}
-          />
-        ) : dailyView === "exercise" ? (
-          <ExerciseTrack
-            plan={plan}
-            theme={getPlanTheme(plan)}
-            onBackHome={() => setDailyView("home")}
+            onCreateNewPlan={handleCreateNewPlan}
           />
         ) : (
           <ResultReveal
             message={message}
             plan={plan}
             resultStep={resultStep}
-            onFinish={() => setDailyView("home")}
+            onFinish={() => navigate("/dashboard")}
             onBackToReview={() => {
               setPlan(null);
               setResultStep(0);
-              setDailyView("result");
+              setPlanView("result");
               setCurrentStep(totalSteps - 1);
               setHasStarted(true);
             }}
@@ -284,7 +323,7 @@ function Plan() {
             onRestart={() => {
               setPlan(null);
               setMessage("");
-              setDailyView("result");
+              setPlanView("result");
               setCurrentStep(0);
               setHasStarted(false);
             }}
@@ -299,11 +338,7 @@ function OnboardingCard({ onStart }) {
   return (
     <section className="onboarding-card">
       <div className="onboarding-badge">Personal plan builder</div>
-      <div className="onboarding-visual" aria-hidden="true">
-        <span>🍽️</span>
-        <span>＋</span>
-        <span>🏃</span>
-      </div>
+      <CompanionMascot size="small" caption="Your CutSmart companion" />
       <h2>Let’s build your CutSmart plan</h2>
       <p>
         A personalised calorie and lifestyle plan, built around your body, goal,
@@ -312,6 +347,54 @@ function OnboardingCard({ onStart }) {
       <button type="button" onClick={onStart}>
         Get Started
       </button>
+    </section>
+  );
+}
+
+function PlanSummary({ plan, onCreateNewPlan }) {
+  return (
+    <section className="plan-summary-page">
+      <div className="plan-summary-hero">
+        <div>
+          <span className="daily-dashboard-eyebrow">My Current Plan</span>
+          <h2>{formatLabel(plan.strategy)} strategy</h2>
+          <p>
+            Your saved CutSmart plan details are here. Use the dashboard for daily
+            tracking and logging.
+          </p>
+        </div>
+        <CompanionMascot size="small" caption="Plan companion" />
+      </div>
+
+      {plan.warning && <div className="warning-note">Heads up: {plan.warning}</div>}
+
+      <div className="plan-summary-grid">
+        <ResultStat label="Target calories" value={`${formatNumber(plan.target_calories)} kcal`} />
+        <ResultStat label="Maintenance calories" value={`${formatNumber(plan.maintenance_calories)} kcal`} />
+        <ResultStat label="Daily deficit" value={`${formatNumber(plan.daily_deficit)} kcal`} />
+        <ResultStat label="Diet deficit" value={`${formatNumber(plan.diet_deficit)} kcal`} />
+        <ResultStat label="Exercise deficit" value={`${formatNumber(plan.exercise_deficit)} kcal`} />
+        <ResultStat label="Recommended timeline" value={`${formatNumber(plan.recommended_timeline_weeks)} weeks`} />
+        <ResultStat
+          label="Current BMI"
+          value={`${formatNumber(plan.current_bmi)} (${plan.current_bmi_category})`}
+        />
+        <ResultStat
+          label="Target BMI"
+          value={`${formatNumber(plan.target_bmi)} (${plan.target_bmi_category})`}
+        />
+        <ResultStat label="Protein" value={`${formatNumber(plan.protein_g)} g`} />
+        <ResultStat label="Carbs" value={`${formatNumber(plan.carbs_g)} g`} />
+        <ResultStat label="Fat" value={`${formatNumber(plan.fat_g)} g`} />
+        <ResultStat label="Timeline status" value={formatLabel(plan.timeline_status)} />
+      </div>
+
+      <div className="plan-summary-actions">
+        <Link to="/dashboard">Back to Dashboard</Link>
+        <button type="button" className="secondary-button" onClick={onCreateNewPlan}>
+          Create New Plan
+        </button>
+      </div>
     </section>
   );
 }
@@ -666,18 +749,24 @@ function ResultReveal({
       caption: calorieCaptions[strategyKey],
       button: "How fast can I get there? ->",
       body: (
-        <HeroMetric
-          value={formatNumber(plan.target_calories)}
-          suffix="kcal/day"
-        />
+        <div className="result-focus-grid">
+          <HeroMetric
+            value={formatNumber(plan.target_calories)}
+            suffix="kcal/day"
+          />
+          <ResultStat
+            label="Daily deficit"
+            value={`${formatNumber(plan.daily_deficit)} kcal`}
+          />
+        </div>
       ),
     },
     {
-      title: "Your estimated journey",
+      title: "Estimated timeline",
       caption: timelineCaptions[strategyKey],
       button: "Reveal my strategy ->",
       body: (
-        <div className="split-metrics">
+        <div className="result-stat-grid">
           <HeroMetric
             value={formatNumber(plan.recommended_timeline_weeks)}
             suffix="weeks"
@@ -785,7 +874,7 @@ function ResultReveal({
           {isLastScreen ? (
             <>
               <button type="button" onClick={onFinish}>
-                Finish / Open Daily Plan Home
+                Finish / Open Dashboard
               </button>
               <button type="button" className="secondary-button" onClick={onRestart}>
                 Create another plan
@@ -876,6 +965,28 @@ function ResultStat({ label, value }) {
   );
 }
 
+async function saveGeneratedPlan(user, inputData, planResult) {
+  if (!user?.id) {
+    return;
+  }
+
+  try {
+    await fetch("/api/plans/save", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        user_id: user.id,
+        input_data: inputData,
+        plan_result: planResult,
+      }),
+    });
+  } catch {
+    // The localStorage save above keeps plan generation usable if saving fails.
+  }
+}
+
 function isStepComplete(step, formData) {
   if (step === 0) {
     return Number(formData.age) > 0 && Boolean(formData.gender);
@@ -943,9 +1054,22 @@ function getUserInitial(user) {
   return name.charAt(0).toUpperCase();
 }
 
-function getPlanTheme(plan) {
-  const strategyKey = plan.strategy in themeContent ? plan.strategy : "balanced";
-  return themeContent[strategyKey];
+function getLatestPlanKey(user) {
+  return user?.id ? `cutsmart_latest_plan_${user.id}` : "cutsmart_latest_plan_guest";
+}
+
+function getStoredLatestPlan(user) {
+  const rawPlan = localStorage.getItem(getLatestPlanKey(user));
+
+  if (!rawPlan) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(rawPlan);
+  } catch {
+    return null;
+  }
 }
 
 export default Plan;
