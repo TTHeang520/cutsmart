@@ -217,7 +217,7 @@ def get_latest_user_plan(user_id):
         SELECT *
         FROM user_plans
         WHERE user_id = ?
-        ORDER BY created_at DESC
+        ORDER BY created_at DESC, id DESC
         LIMIT 1
         """,
         (user_id,)
