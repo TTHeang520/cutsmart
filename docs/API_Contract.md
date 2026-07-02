@@ -710,3 +710,372 @@ No weight record found:
   "message": "No weight found"
 }
 ```
+
+## Fetch Weight By Date
+
+Route:
+
+```text
+GET /api/weights/<user_id>?date=<YYYY-MM-DD>
+```
+
+Example full route:
+
+```text
+http://127.0.0.1:5000/api/weights/1?date=2026-06-30
+```
+
+`user_id` is a path parameter. `date` is a query parameter.
+
+### For Success Response
+
+```json
+{
+  "success": true,
+  "message": "Weight fetched successfully",
+  "date": "2026-06-30",
+  "weight": {
+    "id": 11,
+    "user_id": 1,
+    "weight_kg": 77.9,
+    "logged_date": "2026-06-30",
+    "created_at": "2026-07-01 13:19:50",
+    "updated_at": "2026-07-01 13:24:22"
+  }
+}
+```
+
+### For Error Responses
+
+Missing date query parameter:
+
+```json
+{
+  "success": false,
+  "message": "Date query parameter is required"
+}
+```
+
+No weight for that date:
+
+```json
+{
+  "success": false,
+  "message": "No weight found for this date"
+}
+```
+
+## Food Log
+
+Food Log allows users to record individual foods and calories as dated diary entries.
+
+Required fields are `user_id`, `food_name`, `calories`, `meal_type`, `logged_date`, and `logged_time`.
+
+Optional fields are `protein_g`, `carbs_g`, `fat_g`, and `notes`. Unknown optional values return `null`.
+
+`photo_path` is reserved for the future photo-upload feature. It currently returns `null` because photo uploading is not implemented yet.
+
+Allowed meal types:
+
+```text
+breakfast
+lunch
+dinner
+snack
+```
+
+## Create Food Entry
+
+Route:
+
+```text
+POST /api/foods
+```
+
+### Request
+
+```json
+{
+  "user_id": 1,
+  "food_name": "Chicken rice",
+  "calories": 650,
+  "meal_type": "lunch",
+  "logged_date": "2026-07-02",
+  "logged_time": "12:30",
+  "protein_g": 32,
+  "carbs_g": 75,
+  "fat_g": 20,
+  "notes": "Less rice"
+}
+```
+
+`logged_date` must use `YYYY-MM-DD`. `logged_time` must use zero-padded 24-hour `HH:MM` format.
+
+Macros and notes may be omitted:
+
+```json
+{
+  "user_id": 1,
+  "food_name": "Banana",
+  "calories": 105,
+  "meal_type": "snack",
+  "logged_date": "2026-07-02",
+  "logged_time": "15:05"
+}
+```
+
+### For Success Response
+
+```json
+{
+  "success": true,
+  "message": "Food recorded successfully",
+  "food": {
+    "user_id": 1,
+    "food_name": "Chicken rice",
+    "calories": 650.0,
+    "meal_type": "lunch",
+    "logged_date": "2026-07-02",
+    "logged_time": "12:30",
+    "protein_g": 32.0,
+    "carbs_g": 75.0,
+    "fat_g": 20.0,
+    "notes": "Less rice",
+    "photo_path": null
+  }
+}
+```
+
+### For Error Responses
+
+Common errors include:
+
+```json
+{
+  "success": false,
+  "message": "User id, food name, calories, meal type, date, and time are required"
+}
+```
+
+```json
+{
+  "success": false,
+  "message": "Invalid meal type"
+}
+```
+
+```json
+{
+  "success": false,
+  "message": "Logged time must use HH:MM format"
+}
+```
+
+```json
+{
+  "success": false,
+  "message": "Macro values cannot be negative"
+}
+```
+
+```json
+{
+  "success": false,
+  "message": "User not found"
+}
+```
+
+## Fetch Food History
+
+Route:
+
+```text
+GET /api/foods/history/<user_id>
+```
+
+Example full route:
+
+```text
+http://127.0.0.1:5000/api/foods/history/1
+```
+
+This route returns all food entries for one user, ordered by newest date and time first.
+
+### For Success Response
+
+```json
+{
+  "success": true,
+  "message": "Food history fetched successfully",
+  "history": [
+    {
+      "id": 5,
+      "user_id": 1,
+      "food_name": "Banana",
+      "calories": 105.0,
+      "meal_type": "snack",
+      "logged_date": "2026-07-02",
+      "logged_time": "15:05",
+      "protein_g": null,
+      "carbs_g": null,
+      "fat_g": null,
+      "notes": null,
+      "photo_path": null,
+      "created_at": "2026-07-02 07:05:00",
+      "updated_at": "2026-07-02 07:05:00"
+    }
+  ]
+}
+```
+
+If there are no records, `history` returns an empty list.
+
+## Fetch Foods By Date
+
+Route:
+
+```text
+GET /api/foods/<user_id>?date=<YYYY-MM-DD>
+```
+
+Example full route:
+
+```text
+http://127.0.0.1:5000/api/foods/1?date=2026-07-02
+```
+
+`user_id` is a path parameter. `date` is a query parameter.
+
+Food entries are ordered by `logged_time` from earliest to latest. The response also includes the number of entries and total calories for that date.
+
+### For Success Response
+
+```json
+{
+  "success": true,
+  "message": "Food logs fetched successfully",
+  "date": "2026-07-02",
+  "foods": [
+    {
+      "id": 4,
+      "user_id": 1,
+      "food_name": "Chicken rice",
+      "calories": 650.0,
+      "meal_type": "lunch",
+      "logged_date": "2026-07-02",
+      "logged_time": "12:30",
+      "protein_g": 32.0,
+      "carbs_g": 75.0,
+      "fat_g": 20.0,
+      "notes": "Less rice",
+      "photo_path": null,
+      "created_at": "2026-07-02 04:30:00",
+      "updated_at": "2026-07-02 04:30:00"
+    }
+  ],
+  "summary": {
+    "entry_count": 1,
+    "total_calories": 650.0
+  }
+}
+```
+
+An empty date returns `foods: []`, `entry_count: 0`, and `total_calories: 0`.
+
+## Update Food Entry
+
+Route:
+
+```text
+PUT /api/foods/<food_id>
+```
+
+Example full route:
+
+```text
+http://127.0.0.1:5000/api/foods/4
+```
+
+The request must contain the full edited food entry. Both `food_id` and `user_id` must match the stored record.
+
+### Request
+
+```json
+{
+  "user_id": 1,
+  "food_name": "Large chicken rice",
+  "calories": 720,
+  "meal_type": "lunch",
+  "logged_date": "2026-07-02",
+  "logged_time": "12:45",
+  "protein_g": 35,
+  "notes": "Larger portion"
+}
+```
+
+### For Success Response
+
+```json
+{
+  "success": true,
+  "message": "Food entry updated successfully",
+  "food": {
+    "id": 4,
+    "user_id": 1,
+    "food_name": "Large chicken rice",
+    "calories": 720.0,
+    "meal_type": "lunch",
+    "logged_date": "2026-07-02",
+    "logged_time": "12:45",
+    "protein_g": 35.0,
+    "carbs_g": null,
+    "fat_g": null,
+    "notes": "Larger portion"
+  }
+}
+```
+
+If the food entry does not exist or does not belong to `user_id`:
+
+```json
+{
+  "success": false,
+  "message": "Food entry not found"
+}
+```
+
+## Delete Food Entry
+
+Route:
+
+```text
+DELETE /api/foods/<food_id>
+```
+
+### Request
+
+```json
+{
+  "user_id": 1
+}
+```
+
+Both `food_id` and `user_id` must match before the entry is deleted.
+
+### For Success Response
+
+```json
+{
+  "success": true,
+  "message": "Food entry deleted successfully"
+}
+```
+
+If the food entry does not exist or belongs to another user:
+
+```json
+{
+  "success": false,
+  "message": "Food entry not found"
+}
+```
