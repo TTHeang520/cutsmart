@@ -4913,7 +4913,7 @@ button:disabled {
 .hero-mascot img {
   position: relative;
   z-index: 1;
-  width: 500px;
+  width: 700px;
   height: auto;
   display: block;
   object-fit: contain;
@@ -4921,6 +4921,7 @@ button:disabled {
   border: 0;
   box-shadow: none;
   filter: drop-shadow(0 24px 32px rgba(0, 0, 0, 0.35));
+  transform: translate(50px, 10px) scale(1.2);
 }
 
 .hero-mascot-large img {
@@ -5064,9 +5065,9 @@ button:disabled {
 }
 
 .premium-dashboard-header {
-  min-height: 168px;
+  min-height: 150px;
   gap: 30px;
-  margin-bottom: 16px;
+  margin-bottom: 5px;
 }
 
 .premium-dashboard-header h1 {
@@ -5080,6 +5081,7 @@ button:disabled {
   font-size: 16px;
   letter-spacing: 0;
   text-transform: none;
+  
 }
 
 .premium-dashboard-header p:last-child {
@@ -5459,11 +5461,258 @@ button:disabled {
   box-shadow: 0 0 18px rgba(249, 115, 22, 0.28);
 }
 
-
-
-.hero-mascot img {
-  width: 220px !important;
-  transform: translate(60px, 70px) scale(1.35) !important;
-  transform-origin: center bottom !important;
+/* Dashboard profile dropdown. */
+.dashboard-profile-area {
+  position: absolute;
+  top: 0;
+  right: 0;
+  z-index: 20;
 }
 
+.dashboard-profile-area .dashboard-profile-pill {
+  position: static;
+  min-height: 56px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  cursor: pointer;
+}
+
+.dashboard-profile-area .dashboard-profile-pill:hover {
+  transform: translateY(-1px);
+  border-color: rgba(124, 255, 107, 0.28);
+}
+
+.dashboard-profile-menu {
+  position: absolute;
+  top: calc(100% + 12px);
+  right: 0;
+  width: 260px;
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.13);
+  border-radius: 22px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.055)),
+    rgba(8, 12, 19, 0.94);
+  box-shadow:
+    0 24px 70px rgba(0, 0, 0, 0.42),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(24px);
+  animation: menuIn 160ms ease both;
+}
+
+.dashboard-profile-menu-user {
+  display: grid;
+  gap: 4px;
+  padding: 12px;
+  border-radius: 16px;
+  background: rgba(124, 255, 107, 0.1);
+}
+
+.dashboard-profile-menu-user strong {
+  color: #ffffff;
+  font-size: 15px;
+}
+
+.dashboard-profile-menu-user span {
+  color: rgba(248, 250, 252, 0.58);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.dashboard-profile-menu a,
+.dashboard-profile-menu button {
+  width: 100%;
+  min-height: 42px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  padding: 0 12px;
+  border-radius: 14px;
+  color: rgba(248, 250, 252, 0.82);
+  background: transparent;
+  box-shadow: none;
+  font-size: 14px;
+  font-weight: 850;
+  text-align: left;
+  text-decoration: none;
+}
+
+.dashboard-profile-menu a:hover,
+.dashboard-profile-menu button:hover {
+  color: #ffffff;
+  background: rgba(124, 255, 107, 0.11);
+  transform: none;
+}
+
+.dashboard-profile-menu .logout-menu-item {
+  color: #fecaca;
+}
+
+.dashboard-profile-menu .logout-menu-item:hover {
+  color: #ffffff;
+  background: rgba(248, 113, 113, 0.14);
+}
+
+@media (max-width: 640px) {
+  .dashboard-profile-menu {
+    width: min(260px, calc(100vw - 32px));
+  }
+}
+
+/* Mobile-first app shell and shared bottom navigation. */
+.app-layout {
+  --app-max-width: 1040px;
+  --app-side-padding: clamp(16px, 4vw, 30px);
+  min-height: 100vh;
+  padding:
+    clamp(22px, 4vw, 52px)
+    var(--app-side-padding)
+    calc(116px + env(safe-area-inset-bottom));
+  color: #f8fafc;
+  background:
+    radial-gradient(circle at 18% 10%, rgba(124, 255, 107, 0.12), transparent 25%),
+    radial-gradient(circle at 88% 4%, rgba(59, 130, 246, 0.1), transparent 28%),
+    #05080d;
+}
+
+.app-content {
+  width: 100%;
+  max-width: var(--app-max-width);
+  margin: 0 auto;
+}
+
+.app-layout .dashboard-page,
+.app-layout .plan-page,
+.app-layout .welcome-page,
+.app-layout .tracker-page {
+  min-height: auto;
+  display: block;
+  padding: 0;
+  background: transparent;
+}
+
+.app-layout .premium-dashboard-page {
+  display: block;
+  width: 100%;
+  background: transparent;
+}
+
+.app-layout .dashboard-sidebar,
+.app-layout .daily-dashboard-bottom-nav {
+  display: none;
+}
+
+.app-layout .daily-dashboard-shell,
+.app-layout .plan-shell,
+.app-layout .tracker-shell,
+.app-layout .welcome-card {
+  width: 100%;
+  max-width: var(--app-max-width);
+  margin: 0 auto;
+}
+
+.app-layout .daily-dashboard-shell {
+  min-height: auto;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.app-bottom-nav {
+  position: fixed;
+  z-index: 100;
+  left: 50%;
+  right: auto;
+  bottom: calc(14px + env(safe-area-inset-bottom));
+  width: min(calc(100% - 28px), 640px);
+  min-height: 72px;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 6px;
+  padding: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 26px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.055)),
+    rgba(8, 12, 19, 0.88);
+  box-shadow:
+    0 22px 70px rgba(0, 0, 0, 0.46),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(24px);
+  transform: translateX(-50%);
+}
+
+.app-bottom-nav a {
+  min-width: 0;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 4px;
+  border-radius: 20px;
+  color: rgba(248, 250, 252, 0.58);
+  text-decoration: none;
+  font-weight: 850;
+  transition:
+    color 180ms ease,
+    background 180ms ease,
+    transform 180ms ease;
+}
+
+.app-bottom-nav a:hover {
+  color: rgba(248, 250, 252, 0.9);
+  transform: translateY(-1px);
+}
+
+.app-bottom-nav a.active {
+  color: #7cff6b;
+  background: rgba(124, 255, 107, 0.12);
+}
+
+.app-bottom-nav span {
+  display: grid;
+  place-items: center;
+  font-size: 22px;
+  line-height: 1;
+}
+
+.app-bottom-nav strong {
+  overflow: hidden;
+  max-width: 100%;
+  font-size: 11px;
+  line-height: 1.1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.auth-layout {
+  min-height: 100vh;
+  background: #0b0d12;
+}
+
+.auth-layout .login-page {
+  min-height: 100vh;
+}
+
+@media (max-width: 640px) {
+  .app-layout {
+    --app-side-padding: 14px;
+    padding-top: 18px;
+  }
+
+  .app-bottom-nav {
+    width: min(calc(100% - 18px), 520px);
+    min-height: 68px;
+    border-radius: 24px;
+  }
+
+  .app-bottom-nav span {
+    font-size: 20px;
+  }
+
+  .app-bottom-nav strong {
+    font-size: 10px;
+  }
+}

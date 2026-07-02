@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, Navigate, useNavigate } from "react-router-dom";
 import HeroMascot from "../components/HeroMascot";
 import WeightLineChart from "../components/WeightLineChart";
@@ -12,6 +12,8 @@ function Dashboard() {
   const userId = user?.id;
   const [latestPlan, setLatestPlan] = useState(() => getStoredLatestPlan(user));
   const [isCheckingPlan, setIsCheckingPlan] = useState(Boolean(userId));
+  const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
+  const profileMenuRef = useRef(null);
   const weightHistory = getStoredWeightEntries(user);
   const today = getToday();
   const foodEntries = getStoredEntries(user ? `cutsmart_food_log_${user.id}_${today}` : "");
@@ -54,6 +56,24 @@ function Dashboard() {
       isCurrent = false;
     };
   }, [userId]);
+
+  useEffect(() => {
+    if (!isProfileMenuOpen) {
+      return;
+    }
+
+    function handleOutsideClick(event) {
+      if (profileMenuRef.current && !profileMenuRef.current.contains(event.target)) {
+        setIsProfileMenuOpen(false);
+      }
+    }
+
+    document.addEventListener("mousedown", handleOutsideClick);
+
+    return () => {
+      document.removeEventListener("mousedown", handleOutsideClick);
+    };
+  }, [isProfileMenuOpen]);
 
   function handleLogout() {
     localStorage.removeItem("user");
@@ -141,9 +161,36 @@ function Dashboard() {
               size="large"
               message="You’re doing amazing! Every choice matters."
             />
-            <div className="dashboard-profile-pill">
-              <span>{user.username?.charAt(0).toUpperCase() || "U"}</span>
-              <i aria-hidden="true">⌄</i>
+            <div className="dashboard-profile-area" ref={profileMenuRef}>
+              <button
+                type="button"
+                className="dashboard-profile-pill"
+                onClick={() => setIsProfileMenuOpen((isOpen) => !isOpen)}
+                aria-label="Open profile menu"
+                aria-expanded={isProfileMenuOpen}
+              >
+                <span>{user.username?.charAt(0).toUpperCase() || "U"}</span>
+                <i aria-hidden="true">⌄</i>
+              </button>
+
+              {isProfileMenuOpen && (
+                <div className="dashboard-profile-menu">
+                  <div className="dashboard-profile-menu-user">
+                    <strong>{user.username || "CutSmart user"}</strong>
+                    <span>{user.email || "No email saved"}</span>
+                  </div>
+
+                  <button type="button" onClick={() => setIsProfileMenuOpen(false)}>
+                    Account / Profile
+                  </button>
+                  <Link to="/settings" onClick={() => setIsProfileMenuOpen(false)}>
+                    Settings
+                  </Link>
+                  <button type="button" className="logout-menu-item" onClick={handleLogout}>
+                    Log out
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </header>
