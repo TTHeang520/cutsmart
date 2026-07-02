@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { Link, Navigate, useNavigate } from "react-router-dom";
-import CompanionMascot from "../components/CompanionMascot";
+import HeroMascot from "../components/HeroMascot";
+import WeightLineChart from "../components/WeightLineChart";
+import dashboardMascot from "../assets/companions/dashboard_mascot.png";
 import { getJourneyTheme } from "../data/journeyThemes";
 
 function Dashboard() {
@@ -111,6 +113,11 @@ function Dashboard() {
           <a href="#reports" onClick={(event) => event.preventDefault()}><span aria-hidden="true">▥</span>Reports</a>
           <a href="#settings" onClick={(event) => event.preventDefault()}><span aria-hidden="true">⚙</span>Settings</a>
         </nav>
+        <div className="sidebar-motivation-card">
+          <span aria-hidden="true">🔥</span>
+          <strong>Keep going!</strong>
+          <p>You’re building a better you.</p>
+        </div>
         <button type="button" onClick={handleLogout}>Logout</button>
       </aside>
 
@@ -125,41 +132,39 @@ function Dashboard() {
         <header className="premium-dashboard-header">
           <div>
             <p className="daily-dashboard-greeting">Good morning, {user.username}</p>
-            <h1>Daily dashboard</h1>
+            <h1>Daily Dashboard</h1>
             <p>Here’s your progress for today. Let’s make it count.</p>
           </div>
-          <div className="dashboard-profile-pill">
-            <CompanionMascot size="small" />
-            <span>{user.username?.charAt(0).toUpperCase() || "U"}</span>
+          <div className="dashboard-hero-visual">
+            <HeroMascot
+              src={dashboardMascot}
+              size="large"
+              message="You’re doing amazing! Every choice matters."
+            />
+            <div className="dashboard-profile-pill">
+              <span>{user.username?.charAt(0).toUpperCase() || "U"}</span>
+              <i aria-hidden="true">⌄</i>
+            </div>
           </div>
         </header>
 
-        <section className="dashboard-companion-feature">
-          <CompanionMascot size="medium" />
-          <div>
-            <span className="daily-dashboard-eyebrow">Cloud Buddy</span>
-            <h2>Stage 2</h2>
-            <p>You’re doing amazing. Every healthy choice helps us grow.</p>
-          </div>
-        </section>
-
         <div className="premium-summary-grid">
           <DashboardMetric
-            icon="◎"
+            icon="🎯"
             title="Daily target calories"
             value={latestPlan ? `${formatNumber(latestPlan.target_calories)} kcal` : "Not set"}
             description="Planned intake for today"
             progress={latestPlan ? Math.min((caloriesEaten / latestPlan.target_calories) * 100, 100) : 0}
           />
           <DashboardMetric
-            icon="↘"
+            icon="〽"
             title="Daily deficit"
             value={latestPlan ? `${formatNumber(latestPlan.daily_deficit)} kcal` : "Not set"}
             description="Total estimated deficit"
             accent="purple"
           />
           <DashboardMetric
-            icon="◉"
+            icon="🥗"
             title="Diet deficit"
             value={latestPlan ? `${formatNumber(latestPlan.diet_deficit)} kcal` : "Not set"}
             description="From food choices"
@@ -219,10 +224,10 @@ function Dashboard() {
           <article className="dashboard-feature-card quick-actions-card">
             <h2>Quick actions</h2>
             <div className="quick-action-grid">
-              <Link to="/calendar"><span className="quick-action-icon" aria-hidden="true">▦</span><span>Calendar</span></Link>
-              <a href="#reports" onClick={(event) => event.preventDefault()}><span className="quick-action-icon" aria-hidden="true">▥</span><span>Reports</span></a>
-              <Link to="/weight-track"><span className="quick-action-icon" aria-hidden="true">＋</span><span>Add Weight</span></Link>
-              <a href="#settings" onClick={(event) => event.preventDefault()}><span className="quick-action-icon" aria-hidden="true">⚙</span><span>Settings</span></a>
+              <Link className="quick-calendar" to="/calendar"><span className="quick-action-icon" aria-hidden="true">▣</span><span>Calendar</span></Link>
+              <a className="quick-streak" href="#streak" onClick={(event) => event.preventDefault()}><span className="quick-action-icon" aria-hidden="true">🔥</span><span>Streak</span><small>0 days</small></a>
+              <a className="quick-reports" href="#reports" onClick={(event) => event.preventDefault()}><span className="quick-action-icon" aria-hidden="true">▥</span><span>Reports</span></a>
+              <Link className="quick-weight" to="/weight-track"><span className="quick-action-icon" aria-hidden="true">＋</span><span>Add Weight</span></Link>
             </div>
           </article>
         </section>
@@ -244,21 +249,27 @@ function Dashboard() {
             </div>
           </article>
 
-          <article className="dashboard-feature-card streak-card">
+          <article id="streak" className="dashboard-feature-card streak-card">
+            <span className="streak-watermark" aria-hidden="true">🔥</span>
             <span className="daily-dashboard-eyebrow">Your streak</span>
             <h2>0 days</h2>
-            <p>Stay consistent and build your streak.</p>
             <div className="streak-dot-row">
               {["M", "T", "W", "T", "F", "S", "S"].map((day, index) => (
                 <span key={`${day}-${index}`} className={index === 0 ? "active" : ""}>{day}</span>
               ))}
             </div>
+            <p>Current streak</p>
+            <strong>Stay consistent and build your streak!</strong>
+            <Link to="/calendar">View Calendar <span aria-hidden="true">→</span></Link>
           </article>
         </section>
 
         <section className="dashboard-feature-card dashboard-tip-card">
-          <strong>Tip of the day</strong>
-          <span>Drink more water and stay active. Small steps lead to big changes.</span>
+          <span className="tip-icon" aria-hidden="true">💡</span>
+          <div>
+            <strong>Tip of the day</strong>
+            <span>Drink more water and stay active. Small steps lead to big changes!</span>
+          </div>
         </section>
 
         <section className="dashboard-feature-card bottom-plan-summary">
@@ -346,7 +357,12 @@ function WeightPreview({ history, plan }) {
 
   return (
     <div className="weight-preview">
-      <MiniLineChart entries={sortedHistory} />
+      <WeightLineChart
+        entries={sortedHistory}
+        compact
+        sampleWhenEmpty={false}
+        emptyText="Add weight entries to see your trend."
+      />
       <div className="weight-preview-stats">
         <MacroPill label="Latest" value={latest ? `${formatNumber(latest.weight_kg)} kg` : "--"} />
         <MacroPill label="Start" value={starting ? `${formatNumber(starting.weight_kg)} kg` : "--"} />
@@ -362,34 +378,6 @@ function getLatestWeight(history) {
   }
 
   return [...history].sort((a, b) => a.logged_date.localeCompare(b.logged_date)).at(-1);
-}
-
-function MiniLineChart({ entries }) {
-  if (entries.length < 2) {
-    return (
-      <div className="mini-line-empty">
-        Add at least two weight entries to see your trend.
-      </div>
-    );
-  }
-
-  const values = entries.map((entry) => Number(entry.weight_kg));
-  const min = Math.min(...values);
-  const max = Math.max(...values);
-  const range = max - min || 1;
-  const points = values
-    .map((value, index) => {
-      const x = (index / Math.max(values.length - 1, 1)) * 100;
-      const y = 80 - ((value - min) / range) * 60;
-      return `${x},${y}`;
-    })
-    .join(" ");
-
-  return (
-    <svg className="mini-line-chart" viewBox="0 0 100 90" preserveAspectRatio="none" aria-hidden="true">
-      <polyline points={points} />
-    </svg>
-  );
 }
 
 function getStoredLatestPlan(user) {

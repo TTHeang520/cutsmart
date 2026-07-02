@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { Link, Navigate } from "react-router-dom";
 import CompanionMascot from "../components/CompanionMascot";
+import WeightLineChart from "../components/WeightLineChart";
 
 function WeightTrack() {
   const savedUser = localStorage.getItem("user");
@@ -87,9 +88,6 @@ function WeightTrack() {
           </div>
           <div className="weight-header-actions">
             <CompanionMascot size="medium" />
-            <button type="button" onClick={() => setLoggedDate(getToday())} aria-label="Add weight entry">
-              +
-            </button>
           </div>
         </header>
 
@@ -103,7 +101,7 @@ function WeightTrack() {
           <TrackerMetric
             icon="↓"
             label="Change"
-            value={change === null ? "--" : `${change > 0 ? "+" : ""}${formatNumber(change)} kg`}
+            value={formatSignedWeight(change)}
             detail="vs starting weight"
             tone="purple"
           />
@@ -136,7 +134,7 @@ function WeightTrack() {
               </button>
             ))}
           </div>
-          <WeightLineGraph entries={sortedHistory} />
+          <WeightLineChart entries={sortedHistory} />
         </section>
 
         <div className="weight-track-grid">
@@ -147,7 +145,7 @@ function WeightTrack() {
             <WeightFact label="Goal weight" value={targetWeight ? `${formatNumber(targetWeight)} kg` : "--"} />
             <WeightFact
               label="Total progress"
-              value={change === null ? "--" : `${change > 0 ? "+" : ""}${formatNumber(change)} kg`}
+              value={formatSignedWeight(change)}
               highlight
             />
             <div className="weight-goal-progress">
@@ -248,126 +246,6 @@ function TrackerMetric({ icon, label, value, detail, tone = "default" }) {
   );
 }
 
-function WeightLineGraph({ entries }) {
-  // Use a sample line only when the user has not added enough points yet.
-  const chartEntries = entries.length >= 2 ? entries : getSampleEntries();
-  const values = chartEntries.map((entry) => Number(entry.weight_kg));
-  const min = Math.min(...values);
-  const max = Math.max(...values);
-  const range = max - min || 1;
-  const chartWidth = 720;
-  const chartHeight = 300;
-  const padding = { left: 50, right: 30, top: 30, bottom: 45 };
-  const innerWidth = chartWidth - padding.left - padding.right;
-  const innerHeight = chartHeight - padding.top - padding.bottom;
-  const pointList = values.map((value, index) => {
-    const xRatio = values.length === 1 ? 0.5 : index / Math.max(values.length - 1, 1);
-    const yRatio = (value - min) / range;
-    const x = clamp(padding.left + xRatio * innerWidth, padding.left, chartWidth - padding.right);
-    const y = clamp(
-      padding.top + (1 - yRatio) * innerHeight,
-      padding.top,
-      chartHeight - padding.bottom
-    );
-
-    const tooltipX = clamp(x - 58, padding.left, chartWidth - padding.right - 116);
-    const tooltipY = y < padding.top + 58 ? y + 18 : y - 58;
-
-    return { x, y, tooltipX, tooltipY, value, entry: chartEntries[index] };
-  });
-  const points = pointList
-    .map((point) => `${point.x},${point.y}`)
-    .join(" ");
-  const gridLines = [padding.top, padding.top + innerHeight / 2, padding.top + innerHeight];
-
-  return (
-    <div className="weight-chart-wrap">
-      {entries.length < 2 && (
-        <p className="weight-chart-empty-note">
-          Sample trend shown. Add two entries to see your own graph.
-        </p>
-      )}
-      <div className="weight-chart-y-axis">
-        <span>{formatNumber(max)} kg</span>
-        <span>{formatNumber((max + min) / 2)} kg</span>
-        <span>{formatNumber(min)} kg</span>
-      </div>
-      <svg
-        className="weight-line-chart"
-        viewBox={`0 0 ${chartWidth} ${chartHeight}`}
-        preserveAspectRatio="xMidYMid meet"
-        aria-label="Weight trend line graph"
-      >
-        <defs>
-          <filter id="weight-marker-glow" x="-80%" y="-80%" width="260%" height="260%">
-            <feDropShadow dx="0" dy="0" stdDeviation="4" floodColor="#C66BFF" floodOpacity="0.75" />
-          </filter>
-          <clipPath id="weight-chart-clip">
-            <rect
-              x={padding.left}
-              y={padding.top}
-              width={innerWidth}
-              height={innerHeight}
-              rx="10"
-            />
-          </clipPath>
-        </defs>
-        <g className="chart-grid-lines">
-          {gridLines.map((lineY) => (
-            <line
-              key={lineY}
-              x1={padding.left}
-              x2={chartWidth - padding.right}
-              y1={lineY}
-              y2={lineY}
-            />
-          ))}
-        </g>
-        <g clipPath="url(#weight-chart-clip)">
-          <polyline points={points} />
-        </g>
-        <g className="weight-chart-markers">
-          {pointList.map((point) => (
-            <g
-              className="weight-chart-marker"
-              key={`${point.entry.logged_date}-${point.value}`}
-              tabIndex="0"
-            >
-              <circle cx={point.x} cy={point.y} r="7" />
-              <g className="weight-chart-tooltip" transform={`translate(${point.tooltipX} ${point.tooltipY})`}>
-                <rect width="116" height="42" rx="12" />
-                <text x="58" y="17">{formatNumber(point.value)} kg</text>
-                <text x="58" y="32">{formatShortDate(point.entry.logged_date)}</text>
-              </g>
-              <title>{`${formatNumber(point.value)} kg on ${formatShortDate(point.entry.logged_date)}`}</title>
-            </g>
-          ))}
-        </g>
-      </svg>
-      <div className="weight-chart-x-axis">
-        {chartEntries.map((entry) => (
-          <span key={entry.logged_date}>{formatShortDate(entry.logged_date)}</span>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function clamp(value, min, max) {
-  return Math.min(Math.max(value, min), max);
-}
-
-function getSampleEntries() {
-  return [
-    { logged_date: "2026-06-27", weight_kg: 71.1 },
-    { logged_date: "2026-06-28", weight_kg: 71 },
-    { logged_date: "2026-06-29", weight_kg: 70.6 },
-    { logged_date: "2026-06-30", weight_kg: 70.2 },
-    { logged_date: "2026-07-01", weight_kg: 70.5 },
-    { logged_date: "2026-07-02", weight_kg: 70.3 },
-  ];
-}
-
 function getGoalProgress(startingWeight, latestWeight, targetWeight) {
   if (!startingWeight || !latestWeight || !targetWeight || startingWeight === targetWeight) {
     return 0;
@@ -385,7 +263,25 @@ function formatWeightDifference(entry, previousEntry) {
   }
 
   const difference = Number(entry.weight_kg) - Number(previousEntry.weight_kg);
-  return `${difference > 0 ? "+" : ""}${formatNumber(difference)} kg`;
+  return formatSignedWeight(difference);
+}
+
+function formatSignedWeight(value) {
+  if (value === null || value === undefined || value === "") {
+    return "--";
+  }
+
+  const numericValue = Number(value);
+
+  if (numericValue < 0) {
+    return `- ${formatNumber(Math.abs(numericValue))} kg`;
+  }
+
+  if (numericValue > 0) {
+    return `+ ${formatNumber(numericValue)} kg`;
+  }
+
+  return "0 kg";
 }
 
 function getDateRange(entries) {
@@ -394,14 +290,6 @@ function getDateRange(entries) {
   }
 
   return `${entries[0].logged_date} - ${entries[entries.length - 1].logged_date}`;
-}
-
-function formatShortDate(dateString) {
-  const date = new Date(`${dateString}T00:00:00`);
-  return date.toLocaleDateString(undefined, {
-    month: "short",
-    day: "numeric",
-  });
 }
 
 function getStoredWeightEntries(storageKey) {
