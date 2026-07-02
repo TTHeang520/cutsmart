@@ -100,6 +100,22 @@ def init_db():
     )      
     """)
 
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS exercise_logs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        exercise_name TEXT NOT NULL,
+        duration_minutes REAL NOT NULL,
+        calories_burned REAL NOT NULL,
+        logged_date TEXT NOT NULL,
+        logged_time TEXT NOT NULL,
+        notes TEXT,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users (id)
+    )
+    """)
+
     connection.commit()
     connection.close()
 
@@ -439,6 +455,128 @@ def delete_food_log(food_id, user_id):
             food_id,
             user_id
         )
+    )
+
+    deleted_rows = cursor.rowcount
+    connection.commit()
+    connection.close()
+
+    return deleted_rows
+
+def save_exercise_log(user_id, exercise_data):
+    connection = get_db_connection()
+    cursor = connection.cursor()
+
+    cursor.execute(
+        """
+        INSERT INTO exercise_logs (
+            user_id,
+            exercise_name,
+            duration_minutes,
+            calories_burned,
+            logged_date,
+            logged_time,
+            notes
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            user_id,
+            exercise_data["exercise_name"],
+            exercise_data["duration_minutes"],
+            exercise_data["calories_burned"],
+            exercise_data["logged_date"],
+            exercise_data["logged_time"],
+            exercise_data.get("notes")
+        )
+    )
+
+    connection.commit()
+    connection.close()
+
+def get_exercise_history(user_id):
+    connection = get_db_connection()
+    cursor = connection.cursor()
+
+    cursor.execute(
+        """
+        SELECT *
+        FROM exercise_logs
+        WHERE user_id = ?
+        ORDER BY logged_date DESC, logged_time DESC, id DESC
+        """,
+        (user_id,)
+    )
+
+    exercise_history = cursor.fetchall()
+    connection.close()
+
+    return exercise_history
+
+def get_exercise_logs_by_date(user_id, logged_date):
+    connection = get_db_connection()
+    cursor = connection.cursor()
+
+    cursor.execute(
+        """
+        SELECT *
+        FROM exercise_logs
+        WHERE user_id = ? AND logged_date = ?
+        ORDER BY logged_time ASC, id ASC
+        """,
+        (user_id, logged_date)
+    )
+
+    exercise_logs = cursor.fetchall()
+    connection.close()
+
+    return exercise_logs
+
+def update_exercise_log(exercise_id, user_id, exercise_data):
+    connection = get_db_connection()
+    cursor = connection.cursor()
+
+    cursor.execute(
+        """
+        UPDATE exercise_logs
+        SET
+            exercise_name = ?,
+            duration_minutes = ?,
+            calories_burned = ?,
+            logged_date = ?,
+            logged_time = ?,
+            notes = ?,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = ? AND user_id = ?
+        """,
+        (
+            exercise_data["exercise_name"],
+            exercise_data["duration_minutes"],
+            exercise_data["calories_burned"],
+            exercise_data["logged_date"],
+            exercise_data["logged_time"],
+            exercise_data.get("notes"),
+            exercise_id,
+            user_id
+        )
+    )
+
+    updated_rows = cursor.rowcount
+    connection.commit()
+    connection.close()
+
+    return updated_rows
+
+def delete_exercise_log(exercise_id, user_id):
+    connection = get_db_connection()
+    cursor = connection.cursor()
+
+    cursor.execute(
+        """
+        DELETE FROM exercise_logs
+        WHERE id = ? AND user_id = ?
+        """,
+        (exercise_id, user_id)
     )
 
     deleted_rows = cursor.rowcount

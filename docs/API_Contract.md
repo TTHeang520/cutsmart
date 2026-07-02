@@ -1079,3 +1079,382 @@ If the food entry does not exist or belongs to another user:
   "message": "Food entry not found"
 }
 ```
+
+## Exercise Log
+
+Exercise Log allows users to record individual exercises and calories burned as dated diary entries.
+
+Required fields are `user_id`, `exercise_name`, `duration_minutes`, `calories_burned`, `logged_date`, `logged_time`.
+
+Optional fields are `notes`.
+
+## Create Exercise Entry
+
+Route:
+
+```text
+POST /api/exercises
+```
+
+### Request
+
+```json
+{
+  "user_id": 1,
+  "exercise_name": "Running",
+  "duration_minutes": 30,
+  "calories_burned": 300,
+  "logged_date": "2026-07-02",
+  "logged_time": "12:30",
+  "notes": "Slow pace run"
+}
+```
+
+`duration_minutes` and `calories_burned` must be positive numbers.
+
+`logged_date` must use `YYYY-MM-DD`.
+
+`logged_time` must use zero-padded 24-hour `HH:MM` format.
+
+`notes` is optional. If omitted, it returns `null`.
+
+```json
+{
+  "user_id": 1,
+  "exercise_name": "Running",
+  "duration_minutes": 30,
+  "calories_burned": 300,
+  "logged_date": "2026-07-02",
+  "logged_time": "12:30"
+}
+```
+
+### For Success Response
+
+```json
+{
+   "success": true,
+   "message": "Exercise recorded successfully",
+   "exercise": {
+      "user_id": 1,
+      "exercise_name": "Running",
+      "duration_minutes": 30,
+      "calories_burned": 300,
+      "logged_date": "2026-07-02",
+      "logged_time": "12:30",
+      "notes": "Slow pace run"
+   }
+}
+```
+
+### For Error Responses
+
+Common errors include:
+
+```json
+{
+  "success": false,
+  "message": "Request body must be JSON"
+}
+```
+
+```json
+{
+   "success": false,
+   "message": "User id, exercise name, duration, calories burned, date, and time are required"
+}
+```
+
+```json
+{
+  "success": false,
+  "message": "User id, duration, and calories burned must be numbers"
+}
+```
+
+```json
+{
+   "success": false,
+   "message": "User id, duration, and calories burned must be positive"
+}
+```
+
+```json
+{
+  "success": false,
+  "message": "Logged date must be a real date in YYYY-MM-DD format"
+}
+```
+
+```json
+{
+   "success": false,
+   "message": "Logged date must use YYYY-MM-DD format"
+}
+```
+
+```json
+{
+  "success": false,
+  "message": "Logged time must be a real time in HH:MM format"
+}
+```
+
+```json
+{
+  "success": false,
+  "message": "Logged time must use HH:MM format"
+}
+```
+
+```json
+{
+  "success": false,
+  "message": "User not found"
+}
+```
+
+## Fetch Exercise History
+
+Route:
+
+```text
+GET /api/exercises/history/<user_id>
+```
+
+Example full route:
+
+```text
+http://127.0.0.1:5000/api/exercises/history/1
+```
+
+This route returns all exercise entries for one user, ordered by newest date and time first.
+
+### For Success Response
+
+```json
+{
+  "success": true,
+  "message": "Exercise history fetched successfully",
+  "history": [
+    {
+      "id": 3,
+      "user_id": 1,
+      "exercise_name": "Running",
+      "duration_minutes": 30.0,
+      "calories_burned": 300.0,
+      "logged_date": "2026-07-02",
+      "logged_time": "12:30",
+      "notes": "Slow pace run",
+      "created_at": "2026-07-03 00:52:42",
+      "updated_at": "2026-07-03 00:52:42"
+    }
+  ]
+}
+```
+
+If the user has no exercise records, the route still succeeds with an empty list:
+
+```json
+{
+  "success": true,
+  "message": "Exercise history fetched successfully",
+  "history": []
+}
+```
+
+## Fetch Exercises By Date
+
+Route:
+
+```text
+GET /api/exercises/<user_id>?date=<YYYY-MM-DD>
+```
+
+Example full route:
+
+```text
+http://127.0.0.1:5000/api/exercises/1?date=2026-07-02
+```
+
+`user_id` is a path parameter. `date` is a query parameter.
+
+Exercise entries are ordered by `logged_time` from earliest to latest. The response includes total entries, exercise duration, and calories burned for the selected date.
+
+### For Success Response
+
+```json
+{
+  "success": true,
+  "message": "Exercise logs fetched successfully",
+  "date": "2026-07-02",
+  "exercises": [
+    {
+      "id": 3,
+      "user_id": 1,
+      "exercise_name": "Running",
+      "duration_minutes": 30.0,
+      "calories_burned": 300.0,
+      "logged_date": "2026-07-02",
+      "logged_time": "12:30",
+      "notes": "Slow pace run",
+      "created_at": "2026-07-03 00:52:42",
+      "updated_at": "2026-07-03 00:52:42"
+    }
+  ],
+  "summary": {
+    "entry_count": 1,
+    "total_duration_minutes": 30.0,
+    "total_calories_burned": 300.0
+  }
+}
+```
+
+An empty date returns:
+
+```json
+{
+  "success": true,
+  "message": "Exercise logs fetched successfully",
+  "date": "2026-01-01",
+  "exercises": [],
+  "summary": {
+    "entry_count": 0,
+    "total_duration_minutes": 0,
+    "total_calories_burned": 0
+  }
+}
+```
+
+### For Error Responses
+
+Missing date query parameter:
+
+```json
+{
+  "success": false,
+  "message": "Date query parameter is required"
+}
+```
+
+Invalid date:
+
+```json
+{
+  "success": false,
+  "message": "Date must be a real date in YYYY-MM-DD format"
+}
+```
+
+## Update Exercise Entry
+
+Route:
+
+```text
+PUT /api/exercises/<exercise_id>
+```
+
+Example full route:
+
+```text
+http://127.0.0.1:5000/api/exercises/3
+```
+
+The request must contain the full edited exercise entry. Both `exercise_id` and `user_id` must match the stored record.
+
+### Request
+
+```json
+{
+  "user_id": 1,
+  "exercise_name": "Cycling",
+  "duration_minutes": 40,
+  "calories_burned": 240,
+  "logged_date": "2026-07-02",
+  "logged_time": "13:15",
+  "notes": "Updated workout"
+}
+```
+
+The update route applies the same required-field, number, date, and time validation as the create route.
+
+### For Success Response
+
+```json
+{
+  "success": true,
+  "message": "Exercise entry updated successfully",
+  "exercise": {
+    "id": 3,
+    "user_id": 1,
+    "exercise_name": "Cycling",
+    "duration_minutes": 40.0,
+    "calories_burned": 240.0,
+    "logged_date": "2026-07-02",
+    "logged_time": "13:15",
+    "notes": "Updated workout"
+  }
+}
+```
+
+If the entry does not exist or does not belong to `user_id`:
+
+```json
+{
+  "success": false,
+  "message": "Exercise entry not found"
+}
+```
+
+## Delete Exercise Entry
+
+Route:
+
+```text
+DELETE /api/exercises/<exercise_id>
+```
+
+Example full route:
+
+```text
+http://127.0.0.1:5000/api/exercises/3
+```
+
+### Request
+
+```json
+{
+  "user_id": 1
+}
+```
+
+Both `exercise_id` and `user_id` must match before the entry is deleted.
+
+### For Success Response
+
+```json
+{
+  "success": true,
+  "message": "Exercise entry deleted successfully"
+}
+```
+
+### For Error Responses
+
+Missing user ID:
+
+```json
+{
+  "success": false,
+  "message": "User id is required"
+}
+```
+
+If the entry does not exist or belongs to another user:
+
+```json
+{
+  "success": false,
+  "message": "Exercise entry not found"
+}
+```
