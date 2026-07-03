@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import "./Login.css";
 
+
 function Login() {
   const navigate = useNavigate();
   const [email, setEmail] = useState("");
@@ -100,14 +101,13 @@ function Login() {
                   placeholder="Password"
                   required
                 />
-                <button
-                  type="button"
-                  className="auth-password-toggle"
-                  onClick={() => setShowPassword((currentValue) => !currentValue)}
-                  aria-label={showPassword ? "Hide password" : "Show password"}
-                >
-                  ◉
-                </button>
+               <button
+                type="button"
+                className="auth-password-toggle"
+                onClick={() => setShowPassword(!showPassword)}
+              >
+                {showPassword ? "◌" : "◎"}
+              </button>
               </span>
             </label>
 
@@ -117,10 +117,6 @@ function Login() {
               {isLoading ? "Logging in..." : "Login"}
             </button>
           </form>
-
-          <div className="auth-divider" aria-hidden="true">
-            <span>or</span>
-          </div>
 
           <p className="auth-link-row">
             New to CutSmart? <Link to="/register">Register <span aria-hidden="true">›</span></Link>

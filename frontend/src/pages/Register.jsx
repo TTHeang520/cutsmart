@@ -130,10 +130,6 @@ function Register() {
             </button>
           </form>
 
-          <div className="auth-divider" aria-hidden="true">
-            <span>or</span>
-          </div>
-
           <p className="auth-link-row">
             Already have an account? <Link to="/login">Login <span aria-hidden="true">›</span></Link>
           </p>
