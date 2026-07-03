@@ -4,7 +4,7 @@ from datetime import date, time
 
 from flask import Flask, request
 from flask_cors import CORS
-from database import init_db, create_user, get_user_from_email, save_user_plan, get_latest_user_plan, save_weight_log, get_weight_history, get_weight_by_date, get_latest_weight, save_food_log, get_food_history, get_food_logs_by_date, update_food_log, delete_food_log
+from database import init_db, create_user, get_user_from_email, save_user_plan, get_latest_user_plan, save_weight_log, get_weight_history, get_weight_by_date, get_latest_weight, save_food_log, get_food_history, get_food_logs_by_date, update_food_log, delete_food_log, save_exercise_log, get_exercise_history, get_exercise_logs_by_date, update_exercise_log, delete_exercise_log
 from planner import generate_plan
 from werkzeug.security import generate_password_hash, check_password_hash
 
@@ -772,6 +772,294 @@ def delete_food_entry(food_id):
     return {
         "success": True,
         "message": "Food entry deleted successfully"
+    }
+
+@app.route("/api/exercises", methods=["POST"])
+def create_exercise_log():
+    data = request.get_json()
+
+    if data is None:
+        return {
+            "success": False,
+            "message": "Request body must be JSON"
+        }, 400
+
+    required_fields = [
+        "user_id",
+        "exercise_name",
+        "duration_minutes",
+        "calories_burned",
+        "logged_date",
+        "logged_time"
+    ]
+
+    for field in required_fields:
+        if field not in data or data[field] in ("", None):
+            return {
+                "success": False,
+                "message": "User id, exercise name, duration, calories burned, date, and time are required"
+            }, 400
+
+    try:
+        user_id = int(data["user_id"])
+        data["duration_minutes"] = float(data["duration_minutes"])
+        data["calories_burned"] = float(data["calories_burned"])
+    except (TypeError, ValueError):
+        return {
+            "success": False,
+            "message": "User id, duration, and calories burned must be numbers"
+        }, 400
+
+    if (
+        user_id <= 0
+        or data["duration_minutes"] <= 0
+        or data["calories_burned"] <= 0
+    ):
+        return {
+            "success": False,
+            "message": "User id, duration, and calories burned must be positive"
+        }, 400
+
+    try:
+        parsed_date = date.fromisoformat(data["logged_date"])
+    except (TypeError, ValueError):
+        return {
+            "success": False,
+            "message": "Logged date must be a real date in YYYY-MM-DD format"
+        }, 400
+
+    if parsed_date.isoformat() != data["logged_date"]:
+        return {
+            "success": False,
+            "message": "Logged date must use YYYY-MM-DD format"
+        }, 400
+
+    try:
+        parsed_time = time.fromisoformat(data["logged_time"])
+    except (TypeError, ValueError):
+        return {
+            "success": False,
+            "message": "Logged time must be a real time in HH:MM format"
+        }, 400
+
+    if parsed_time.strftime("%H:%M") != data["logged_time"]:
+        return {
+            "success": False,
+            "message": "Logged time must use HH:MM format"
+        }, 400
+
+    try:
+        save_exercise_log(user_id, data)
+    except sqlite3.IntegrityError:
+        return {
+            "success": False,
+            "message": "User not found"
+        }, 404
+
+    return {
+        "success": True,
+        "message": "Exercise recorded successfully",
+        "exercise": {
+            "user_id": user_id,
+            "exercise_name": data["exercise_name"],
+            "duration_minutes": data["duration_minutes"],
+            "calories_burned": data["calories_burned"],
+            "logged_date": data["logged_date"],
+            "logged_time": data["logged_time"],
+            "notes": data.get("notes")
+        }
+    }
+
+@app.route("/api/exercises/history/<int:user_id>", methods=["GET"])
+def exercise_history(user_id):
+    history = get_exercise_history(user_id)
+
+    return {
+        "success": True,
+        "message": "Exercise history fetched successfully",
+        "history": [dict(row) for row in history]
+    }
+
+@app.route("/api/exercises/<int:user_id>", methods=["GET"])
+def exercises_by_date(user_id):
+    logged_date = request.args.get("date")
+
+    if not logged_date:
+        return {
+            "success": False,
+            "message": "Date query parameter is required"
+        }, 400
+
+    try:
+        parsed_date = date.fromisoformat(logged_date)
+    except (TypeError, ValueError):
+        return {
+            "success": False,
+            "message": "Date must be a real date in YYYY-MM-DD format"
+        }, 400
+
+    if parsed_date.isoformat() != logged_date:
+        return {
+            "success": False,
+            "message": "Date must use YYYY-MM-DD format"
+        }, 400
+
+    exercise_logs = get_exercise_logs_by_date(user_id, logged_date)
+    total_duration = sum(row["duration_minutes"] for row in exercise_logs)
+    total_calories = sum(row["calories_burned"] for row in exercise_logs)
+
+    return {
+        "success": True,
+        "message": "Exercise logs fetched successfully",
+        "date": logged_date,
+        "exercises": [dict(row) for row in exercise_logs],
+        "summary": {
+            "entry_count": len(exercise_logs),
+            "total_duration_minutes": total_duration,
+            "total_calories_burned": total_calories
+        }
+    }
+
+@app.route("/api/exercises/<int:exercise_id>", methods=["PUT"])
+def update_exercise_entry(exercise_id):
+    data = request.get_json()
+
+    if data is None:
+        return {
+            "success": False,
+            "message": "Request body must be JSON"
+        }, 400
+
+    required_fields = [
+        "user_id",
+        "exercise_name",
+        "duration_minutes",
+        "calories_burned",
+        "logged_date",
+        "logged_time"
+    ]
+
+    for field in required_fields:
+        if field not in data or data[field] in ("", None):
+            return {
+                "success": False,
+                "message": "User id, exercise name, duration, calories burned, date, and time are required"
+            }, 400
+
+    try:
+        user_id = int(data["user_id"])
+        data["duration_minutes"] = float(data["duration_minutes"])
+        data["calories_burned"] = float(data["calories_burned"])
+    except (TypeError, ValueError):
+        return {
+            "success": False,
+            "message": "User id, duration, and calories burned must be numbers"
+        }, 400
+
+    if (
+        user_id <= 0
+        or data["duration_minutes"] <= 0
+        or data["calories_burned"] <= 0
+    ):
+        return {
+            "success": False,
+            "message": "User id, duration, and calories burned must be positive"
+        }, 400
+
+    try:
+        parsed_date = date.fromisoformat(data["logged_date"])
+    except (TypeError, ValueError):
+        return {
+            "success": False,
+            "message": "Logged date must be a real date in YYYY-MM-DD format"
+        }, 400
+
+    if parsed_date.isoformat() != data["logged_date"]:
+        return {
+            "success": False,
+            "message": "Logged date must use YYYY-MM-DD format"
+        }, 400
+
+    try:
+        parsed_time = time.fromisoformat(data["logged_time"])
+    except (TypeError, ValueError):
+        return {
+            "success": False,
+            "message": "Logged time must be a real time in HH:MM format"
+        }, 400
+
+    if parsed_time.strftime("%H:%M") != data["logged_time"]:
+        return {
+            "success": False,
+            "message": "Logged time must use HH:MM format"
+        }, 400
+
+    updated_rows = update_exercise_log(exercise_id, user_id, data)
+
+    if updated_rows == 0:
+        return {
+            "success": False,
+            "message": "Exercise entry not found"
+        }, 404
+
+    return {
+        "success": True,
+        "message": "Exercise entry updated successfully",
+        "exercise": {
+            "id": exercise_id,
+            "user_id": user_id,
+            "exercise_name": data["exercise_name"],
+            "duration_minutes": data["duration_minutes"],
+            "calories_burned": data["calories_burned"],
+            "logged_date": data["logged_date"],
+            "logged_time": data["logged_time"],
+            "notes": data.get("notes")
+        }
+    }
+
+@app.route("/api/exercises/<int:exercise_id>", methods=["DELETE"])
+def delete_exercise_entry(exercise_id):
+    data = request.get_json()
+
+    if data is None:
+        return {
+            "success": False,
+            "message": "Request body must be JSON"
+        }, 400
+
+    user_id = data.get("user_id")
+
+    if user_id in ("", None):
+        return {
+            "success": False,
+            "message": "User id is required"
+        }, 400
+
+    try:
+        user_id = int(user_id)
+    except (TypeError, ValueError):
+        return {
+            "success": False,
+            "message": "User id must be a number"
+        }, 400
+
+    if user_id <= 0:
+        return {
+            "success": False,
+            "message": "User id must be positive"
+        }, 400
+
+    deleted_rows = delete_exercise_log(exercise_id, user_id)
+
+    if deleted_rows == 0:
+        return {
+            "success": False,
+            "message": "Exercise entry not found"
+        }, 404
+
+    return {
+        "success": True,
+        "message": "Exercise entry deleted successfully"
     }
 
 if __name__ == "__main__":

@@ -710,3 +710,751 @@ No weight record found:
   "message": "No weight found"
 }
 ```
+
+## Fetch Weight By Date
+
+Route:
+
+```text
+GET /api/weights/<user_id>?date=<YYYY-MM-DD>
+```
+
+Example full route:
+
+```text
+http://127.0.0.1:5000/api/weights/1?date=2026-06-30
+```
+
+`user_id` is a path parameter. `date` is a query parameter.
+
+### For Success Response
+
+```json
+{
+  "success": true,
+  "message": "Weight fetched successfully",
+  "date": "2026-06-30",
+  "weight": {
+    "id": 11,
+    "user_id": 1,
+    "weight_kg": 77.9,
+    "logged_date": "2026-06-30",
+    "created_at": "2026-07-01 13:19:50",
+    "updated_at": "2026-07-01 13:24:22"
+  }
+}
+```
+
+### For Error Responses
+
+Missing date query parameter:
+
+```json
+{
+  "success": false,
+  "message": "Date query parameter is required"
+}
+```
+
+No weight for that date:
+
+```json
+{
+  "success": false,
+  "message": "No weight found for this date"
+}
+```
+
+## Food Log
+
+Food Log allows users to record individual foods and calories as dated diary entries.
+
+Required fields are `user_id`, `food_name`, `calories`, `meal_type`, `logged_date`, and `logged_time`.
+
+Optional fields are `protein_g`, `carbs_g`, `fat_g`, and `notes`. Unknown optional values return `null`.
+
+`photo_path` is reserved for the future photo-upload feature. It currently returns `null` because photo uploading is not implemented yet.
+
+Allowed meal types:
+
+```text
+breakfast
+lunch
+dinner
+snack
+```
+
+## Create Food Entry
+
+Route:
+
+```text
+POST /api/foods
+```
+
+### Request
+
+```json
+{
+  "user_id": 1,
+  "food_name": "Chicken rice",
+  "calories": 650,
+  "meal_type": "lunch",
+  "logged_date": "2026-07-02",
+  "logged_time": "12:30",
+  "protein_g": 32,
+  "carbs_g": 75,
+  "fat_g": 20,
+  "notes": "Less rice"
+}
+```
+
+`logged_date` must use `YYYY-MM-DD`. `logged_time` must use zero-padded 24-hour `HH:MM` format.
+
+Macros and notes may be omitted:
+
+```json
+{
+  "user_id": 1,
+  "food_name": "Banana",
+  "calories": 105,
+  "meal_type": "snack",
+  "logged_date": "2026-07-02",
+  "logged_time": "15:05"
+}
+```
+
+### For Success Response
+
+```json
+{
+  "success": true,
+  "message": "Food recorded successfully",
+  "food": {
+    "user_id": 1,
+    "food_name": "Chicken rice",
+    "calories": 650.0,
+    "meal_type": "lunch",
+    "logged_date": "2026-07-02",
+    "logged_time": "12:30",
+    "protein_g": 32.0,
+    "carbs_g": 75.0,
+    "fat_g": 20.0,
+    "notes": "Less rice",
+    "photo_path": null
+  }
+}
+```
+
+### For Error Responses
+
+Common errors include:
+
+```json
+{
+  "success": false,
+  "message": "User id, food name, calories, meal type, date, and time are required"
+}
+```
+
+```json
+{
+  "success": false,
+  "message": "Invalid meal type"
+}
+```
+
+```json
+{
+  "success": false,
+  "message": "Logged time must use HH:MM format"
+}
+```
+
+```json
+{
+  "success": false,
+  "message": "Macro values cannot be negative"
+}
+```
+
+```json
+{
+  "success": false,
+  "message": "User not found"
+}
+```
+
+## Fetch Food History
+
+Route:
+
+```text
+GET /api/foods/history/<user_id>
+```
+
+Example full route:
+
+```text
+http://127.0.0.1:5000/api/foods/history/1
+```
+
+This route returns all food entries for one user, ordered by newest date and time first.
+
+### For Success Response
+
+```json
+{
+  "success": true,
+  "message": "Food history fetched successfully",
+  "history": [
+    {
+      "id": 5,
+      "user_id": 1,
+      "food_name": "Banana",
+      "calories": 105.0,
+      "meal_type": "snack",
+      "logged_date": "2026-07-02",
+      "logged_time": "15:05",
+      "protein_g": null,
+      "carbs_g": null,
+      "fat_g": null,
+      "notes": null,
+      "photo_path": null,
+      "created_at": "2026-07-02 07:05:00",
+      "updated_at": "2026-07-02 07:05:00"
+    }
+  ]
+}
+```
+
+If there are no records, `history` returns an empty list.
+
+## Fetch Foods By Date
+
+Route:
+
+```text
+GET /api/foods/<user_id>?date=<YYYY-MM-DD>
+```
+
+Example full route:
+
+```text
+http://127.0.0.1:5000/api/foods/1?date=2026-07-02
+```
+
+`user_id` is a path parameter. `date` is a query parameter.
+
+Food entries are ordered by `logged_time` from earliest to latest. The response also includes the number of entries and total calories for that date.
+
+### For Success Response
+
+```json
+{
+  "success": true,
+  "message": "Food logs fetched successfully",
+  "date": "2026-07-02",
+  "foods": [
+    {
+      "id": 4,
+      "user_id": 1,
+      "food_name": "Chicken rice",
+      "calories": 650.0,
+      "meal_type": "lunch",
+      "logged_date": "2026-07-02",
+      "logged_time": "12:30",
+      "protein_g": 32.0,
+      "carbs_g": 75.0,
+      "fat_g": 20.0,
+      "notes": "Less rice",
+      "photo_path": null,
+      "created_at": "2026-07-02 04:30:00",
+      "updated_at": "2026-07-02 04:30:00"
+    }
+  ],
+  "summary": {
+    "entry_count": 1,
+    "total_calories": 650.0
+  }
+}
+```
+
+An empty date returns `foods: []`, `entry_count: 0`, and `total_calories: 0`.
+
+## Update Food Entry
+
+Route:
+
+```text
+PUT /api/foods/<food_id>
+```
+
+Example full route:
+
+```text
+http://127.0.0.1:5000/api/foods/4
+```
+
+The request must contain the full edited food entry. Both `food_id` and `user_id` must match the stored record.
+
+### Request
+
+```json
+{
+  "user_id": 1,
+  "food_name": "Large chicken rice",
+  "calories": 720,
+  "meal_type": "lunch",
+  "logged_date": "2026-07-02",
+  "logged_time": "12:45",
+  "protein_g": 35,
+  "notes": "Larger portion"
+}
+```
+
+### For Success Response
+
+```json
+{
+  "success": true,
+  "message": "Food entry updated successfully",
+  "food": {
+    "id": 4,
+    "user_id": 1,
+    "food_name": "Large chicken rice",
+    "calories": 720.0,
+    "meal_type": "lunch",
+    "logged_date": "2026-07-02",
+    "logged_time": "12:45",
+    "protein_g": 35.0,
+    "carbs_g": null,
+    "fat_g": null,
+    "notes": "Larger portion"
+  }
+}
+```
+
+If the food entry does not exist or does not belong to `user_id`:
+
+```json
+{
+  "success": false,
+  "message": "Food entry not found"
+}
+```
+
+## Delete Food Entry
+
+Route:
+
+```text
+DELETE /api/foods/<food_id>
+```
+
+### Request
+
+```json
+{
+  "user_id": 1
+}
+```
+
+Both `food_id` and `user_id` must match before the entry is deleted.
+
+### For Success Response
+
+```json
+{
+  "success": true,
+  "message": "Food entry deleted successfully"
+}
+```
+
+If the food entry does not exist or belongs to another user:
+
+```json
+{
+  "success": false,
+  "message": "Food entry not found"
+}
+```
+
+## Exercise Log
+
+Exercise Log allows users to record individual exercises and calories burned as dated diary entries.
+
+Required fields are `user_id`, `exercise_name`, `duration_minutes`, `calories_burned`, `logged_date`, `logged_time`.
+
+Optional fields are `notes`.
+
+## Create Exercise Entry
+
+Route:
+
+```text
+POST /api/exercises
+```
+
+### Request
+
+```json
+{
+  "user_id": 1,
+  "exercise_name": "Running",
+  "duration_minutes": 30,
+  "calories_burned": 300,
+  "logged_date": "2026-07-02",
+  "logged_time": "12:30",
+  "notes": "Slow pace run"
+}
+```
+
+`duration_minutes` and `calories_burned` must be positive numbers.
+
+`logged_date` must use `YYYY-MM-DD`.
+
+`logged_time` must use zero-padded 24-hour `HH:MM` format.
+
+`notes` is optional. If omitted, it returns `null`.
+
+```json
+{
+  "user_id": 1,
+  "exercise_name": "Running",
+  "duration_minutes": 30,
+  "calories_burned": 300,
+  "logged_date": "2026-07-02",
+  "logged_time": "12:30"
+}
+```
+
+### For Success Response
+
+```json
+{
+   "success": true,
+   "message": "Exercise recorded successfully",
+   "exercise": {
+      "user_id": 1,
+      "exercise_name": "Running",
+      "duration_minutes": 30,
+      "calories_burned": 300,
+      "logged_date": "2026-07-02",
+      "logged_time": "12:30",
+      "notes": "Slow pace run"
+   }
+}
+```
+
+### For Error Responses
+
+Common errors include:
+
+```json
+{
+  "success": false,
+  "message": "Request body must be JSON"
+}
+```
+
+```json
+{
+   "success": false,
+   "message": "User id, exercise name, duration, calories burned, date, and time are required"
+}
+```
+
+```json
+{
+  "success": false,
+  "message": "User id, duration, and calories burned must be numbers"
+}
+```
+
+```json
+{
+   "success": false,
+   "message": "User id, duration, and calories burned must be positive"
+}
+```
+
+```json
+{
+  "success": false,
+  "message": "Logged date must be a real date in YYYY-MM-DD format"
+}
+```
+
+```json
+{
+   "success": false,
+   "message": "Logged date must use YYYY-MM-DD format"
+}
+```
+
+```json
+{
+  "success": false,
+  "message": "Logged time must be a real time in HH:MM format"
+}
+```
+
+```json
+{
+  "success": false,
+  "message": "Logged time must use HH:MM format"
+}
+```
+
+```json
+{
+  "success": false,
+  "message": "User not found"
+}
+```
+
+## Fetch Exercise History
+
+Route:
+
+```text
+GET /api/exercises/history/<user_id>
+```
+
+Example full route:
+
+```text
+http://127.0.0.1:5000/api/exercises/history/1
+```
+
+This route returns all exercise entries for one user, ordered by newest date and time first.
+
+### For Success Response
+
+```json
+{
+  "success": true,
+  "message": "Exercise history fetched successfully",
+  "history": [
+    {
+      "id": 3,
+      "user_id": 1,
+      "exercise_name": "Running",
+      "duration_minutes": 30.0,
+      "calories_burned": 300.0,
+      "logged_date": "2026-07-02",
+      "logged_time": "12:30",
+      "notes": "Slow pace run",
+      "created_at": "2026-07-03 00:52:42",
+      "updated_at": "2026-07-03 00:52:42"
+    }
+  ]
+}
+```
+
+If the user has no exercise records, the route still succeeds with an empty list:
+
+```json
+{
+  "success": true,
+  "message": "Exercise history fetched successfully",
+  "history": []
+}
+```
+
+## Fetch Exercises By Date
+
+Route:
+
+```text
+GET /api/exercises/<user_id>?date=<YYYY-MM-DD>
+```
+
+Example full route:
+
+```text
+http://127.0.0.1:5000/api/exercises/1?date=2026-07-02
+```
+
+`user_id` is a path parameter. `date` is a query parameter.
+
+Exercise entries are ordered by `logged_time` from earliest to latest. The response includes total entries, exercise duration, and calories burned for the selected date.
+
+### For Success Response
+
+```json
+{
+  "success": true,
+  "message": "Exercise logs fetched successfully",
+  "date": "2026-07-02",
+  "exercises": [
+    {
+      "id": 3,
+      "user_id": 1,
+      "exercise_name": "Running",
+      "duration_minutes": 30.0,
+      "calories_burned": 300.0,
+      "logged_date": "2026-07-02",
+      "logged_time": "12:30",
+      "notes": "Slow pace run",
+      "created_at": "2026-07-03 00:52:42",
+      "updated_at": "2026-07-03 00:52:42"
+    }
+  ],
+  "summary": {
+    "entry_count": 1,
+    "total_duration_minutes": 30.0,
+    "total_calories_burned": 300.0
+  }
+}
+```
+
+An empty date returns:
+
+```json
+{
+  "success": true,
+  "message": "Exercise logs fetched successfully",
+  "date": "2026-01-01",
+  "exercises": [],
+  "summary": {
+    "entry_count": 0,
+    "total_duration_minutes": 0,
+    "total_calories_burned": 0
+  }
+}
+```
+
+### For Error Responses
+
+Missing date query parameter:
+
+```json
+{
+  "success": false,
+  "message": "Date query parameter is required"
+}
+```
+
+Invalid date:
+
+```json
+{
+  "success": false,
+  "message": "Date must be a real date in YYYY-MM-DD format"
+}
+```
+
+## Update Exercise Entry
+
+Route:
+
+```text
+PUT /api/exercises/<exercise_id>
+```
+
+Example full route:
+
+```text
+http://127.0.0.1:5000/api/exercises/3
+```
+
+The request must contain the full edited exercise entry. Both `exercise_id` and `user_id` must match the stored record.
+
+### Request
+
+```json
+{
+  "user_id": 1,
+  "exercise_name": "Cycling",
+  "duration_minutes": 40,
+  "calories_burned": 240,
+  "logged_date": "2026-07-02",
+  "logged_time": "13:15",
+  "notes": "Updated workout"
+}
+```
+
+The update route applies the same required-field, number, date, and time validation as the create route.
+
+### For Success Response
+
+```json
+{
+  "success": true,
+  "message": "Exercise entry updated successfully",
+  "exercise": {
+    "id": 3,
+    "user_id": 1,
+    "exercise_name": "Cycling",
+    "duration_minutes": 40.0,
+    "calories_burned": 240.0,
+    "logged_date": "2026-07-02",
+    "logged_time": "13:15",
+    "notes": "Updated workout"
+  }
+}
+```
+
+If the entry does not exist or does not belong to `user_id`:
+
+```json
+{
+  "success": false,
+  "message": "Exercise entry not found"
+}
+```
+
+## Delete Exercise Entry
+
+Route:
+
+```text
+DELETE /api/exercises/<exercise_id>
+```
+
+Example full route:
+
+```text
+http://127.0.0.1:5000/api/exercises/3
+```
+
+### Request
+
+```json
+{
+  "user_id": 1
+}
+```
+
+Both `exercise_id` and `user_id` must match before the entry is deleted.
+
+### For Success Response
+
+```json
+{
+  "success": true,
+  "message": "Exercise entry deleted successfully"
+}
+```
+
+### For Error Responses
+
+Missing user ID:
+
+```json
+{
+  "success": false,
+  "message": "User id is required"
+}
+```
+
+If the entry does not exist or belongs to another user:
+
+```json
+{
+  "success": false,
+  "message": "Exercise entry not found"
+}
+```
