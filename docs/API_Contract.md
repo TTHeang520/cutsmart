@@ -293,7 +293,9 @@ Invalid desired timeline:
 - Register and login must use `POST` to get users data.
 - Generate plan must use `POST`.
 - Save plan must use `POST`.
+- Save plan should send `mode: "update"` or `mode: "new"`.
 - Fetch latest saved plan must use `GET`.
+- Fetch journey history and plans from a journey must use `GET`.
 - Send request data as JSON.
 - Use the exact key names shown in this document.
 - `id` is not needed from frontend. The backend creates and returns it.
@@ -318,6 +320,7 @@ Frontend should send JSON with these exact top-level key names:
 ```json
 {
   "user_id": 1,
+  "mode": "update",
   "input_data": {
     "age": 22,
     "gender": "male",
@@ -358,6 +361,44 @@ Frontend should send JSON with these exact top-level key names:
 ### Request Field Notes
 
 `user_id` should be the logged-in user's `id` from the login response.
+
+`mode` controls how the saved plan is grouped:
+
+```text
+update
+new
+```
+
+Use `update` to add a new plan version to the user's current active journey. Existing weight, food, and exercise logs remain in that journey.
+
+Use `new` to archive the current journey and create a new active journey. The backend saves the new journey's first plan and creates its initial weight log. Food and exercise logs begin empty for the new journey.
+
+If `mode` is omitted, the backend uses `update`. If the user does not have an active journey yet, the backend creates a new journey even when `mode` is omitted.
+
+There is no separate start-journey API route. Starting a journey always happens through `POST /api/plans/save`, ensuring that a journey cannot be created without its first plan.
+
+For `mode: "update"`, the backend:
+
+```text
+Finds the active journey
+Keeps the same journey_id
+Inserts a new plan version with a new plan_id
+Keeps the existing logs
+```
+
+The previous plan row is not overwritten.
+
+For `mode: "new"`, the backend performs these steps as one database transaction:
+
+```text
+Archives the previous active journey and sets ended_at
+Creates a new active journey and journey_id
+Inserts the journey's first plan
+Creates the journey's initial weight log
+Commits all changes together
+```
+
+If one of these steps fails, the backend rolls back the transaction instead of leaving a partially created journey.
 
 `input_data` should contain the original form data used to generate the plan.
 
@@ -404,9 +445,14 @@ fat_g
 ```json
 {
   "success": true,
-  "message": "Plan saved successfully"
+  "message": "Plan saved successfully",
+  "mode": "update",
+  "journey_id": 3,
+  "plan_id": 8
 }
 ```
+
+`journey_id` identifies the journey containing the saved plan. `plan_id` identifies the newly inserted plan version.
 
 ### For Error Responses
 
@@ -446,6 +492,24 @@ Missing plan result fields:
 }
 ```
 
+Invalid mode:
+
+```json
+{
+  "success": false,
+  "message": "Mode must be update or new"
+}
+```
+
+User not found:
+
+```json
+{
+  "success": false,
+  "message": "User not found"
+}
+```
+
 ## Fetch Latest Saved Plan
 
 Route:
@@ -473,6 +537,7 @@ The backend uses the saved plan's `created_at` value to sort newest first.
   "plan": {
     "id": 1,
     "user_id": 1,
+    "journey_id": 3,
     "age": 22,
     "gender": "male",
     "height_cm": 175,
@@ -518,11 +583,102 @@ No saved plan:
 }
 ```
 
+## Fetch Journey History
+
+Route:
+
+```text
+GET /api/journeys/history/<user_id>
+```
+
+Example full route:
+
+```text
+http://127.0.0.1:5000/api/journeys/history/1
+```
+
+This route returns every journey belonging to one user. The active journey and archived journeys are returned newest first.
+
+### For Success Response
+
+```json
+{
+  "success": true,
+  "message": "Journey history fetched successfully",
+  "journeys": [
+    {
+      "id": 3,
+      "user_id": 1,
+      "initial_weight_kg": 76,
+      "target_weight_kg": 68,
+      "status": "active",
+      "started_at": "2026-07-04 10:30:00",
+      "ended_at": null
+    },
+    {
+      "id": 2,
+      "user_id": 1,
+      "initial_weight_kg": 80,
+      "target_weight_kg": 72,
+      "status": "archived",
+      "started_at": "2026-06-24 17:48:30",
+      "ended_at": "2026-07-04 10:30:00"
+    }
+  ]
+}
+```
+
+If the user has no journeys, the route returns `success: true` with an empty `journeys` array.
+
+## Fetch Plans From One Journey
+
+Route:
+
+```text
+GET /api/users/<user_id>/journeys/<journey_id>/plans
+```
+
+Example full route:
+
+```text
+http://127.0.0.1:5000/api/users/1/journeys/3/plans
+```
+
+This route returns every saved plan version from one journey, newest first. Both `user_id` and `journey_id` are required so the query only returns plans when the journey belongs to that user.
+
+### For Success Response
+
+```json
+{
+  "success": true,
+  "message": "Journey plans fetched successfully",
+  "plans": [
+    {
+      "id": 8,
+      "user_id": 1,
+      "journey_id": 3,
+      "current_weight_kg": 76,
+      "target_weight_kg": 68,
+      "target_calories": 1950,
+      "daily_deficit": 500,
+      "alternative_plan": null,
+      "created_at": "2026-07-04 10:30:00"
+    }
+  ]
+}
+```
+
+Each plan object also contains the other plan fields documented in **Fetch Latest Saved Plan**.
+
+If the journey has no matching plans or does not belong to the supplied user, the route returns `success: true` with an empty `plans` array.
+
 ## Weight Log
 
-Weight Log allows a registered user to record body weight by date.
+Weight Log allows a registered user to record body weight by date inside the user's active journey.
 
-A user can have one weight record per date. Sending another weight for the same user and date updates the existing record.
+A user can have one weight record per date in each journey. Sending another weight for the same date in the active journey updates that journey's existing record.
+
+Weight create, history, latest, and date routes operate on the active journey automatically. The frontend does not send `journey_id`.
 
 ## Create Or Update Weight
 
@@ -552,6 +708,8 @@ POST /api/weights
 
 If the user already has a weight record for that date, the backend updates its `weight_kg` and `updated_at` values.
 
+If `logged_date` matches the active journey's start date, updating that weight also corrects the journey's `initial_weight_kg`. Later weight entries do not change the journey's initial weight.
+
 ### For Success Response
 
 ```json
@@ -560,6 +718,7 @@ If the user already has a weight record for that date, the backend updates its `
   "message": "Weight recorded successfully",
   "weight": {
     "user_id": 1,
+    "journey_id": 3,
     "weight_kg": 77.9,
     "logged_date": "2026-06-30"
   }
@@ -619,6 +778,15 @@ User not found:
 {
   "success": false,
   "message": "User not found"
+}
+```
+
+No active journey:
+
+```json
+{
+  "success": false,
+  "message": "Active journey not found. Create a plan first"
 }
 ```
 
@@ -767,7 +935,9 @@ No weight for that date:
 
 ## Food Log
 
-Food Log allows users to record individual foods and calories as dated diary entries.
+Food Log allows users to record individual foods and calories as dated diary entries inside the active journey.
+
+Food create, history, date, update, and delete routes operate on the active journey automatically. The frontend does not send `journey_id`.
 
 Required fields are `user_id`, `food_name`, `calories`, `meal_type`, `logged_date`, and `logged_time`.
 
@@ -832,6 +1002,7 @@ Macros and notes may be omitted:
   "message": "Food recorded successfully",
   "food": {
     "user_id": 1,
+    "journey_id": 3,
     "food_name": "Chicken rice",
     "calories": 650.0,
     "meal_type": "lunch",
@@ -849,6 +1020,13 @@ Macros and notes may be omitted:
 ### For Error Responses
 
 Common errors include:
+
+```json
+{
+  "success": false,
+  "message": "Active journey not found. Create a plan first"
+}
+```
 
 ```json
 {
@@ -1082,7 +1260,9 @@ If the food entry does not exist or belongs to another user:
 
 ## Exercise Log
 
-Exercise Log allows users to record individual exercises and calories burned as dated diary entries.
+Exercise Log allows users to record individual exercises and calories burned as dated diary entries inside the active journey.
+
+Exercise create, history, date, update, and delete routes operate on the active journey automatically. The frontend does not send `journey_id`.
 
 Required fields are `user_id`, `exercise_name`, `duration_minutes`, `calories_burned`, `logged_date`, `logged_time`.
 
@@ -1137,6 +1317,7 @@ POST /api/exercises
    "message": "Exercise recorded successfully",
    "exercise": {
       "user_id": 1,
+      "journey_id": 3,
       "exercise_name": "Running",
       "duration_minutes": 30,
       "calories_burned": 300,
@@ -1150,6 +1331,13 @@ POST /api/exercises
 ### For Error Responses
 
 Common errors include:
+
+```json
+{
+  "success": false,
+  "message": "Active journey not found. Create a plan first"
+}
+```
 
 ```json
 {
