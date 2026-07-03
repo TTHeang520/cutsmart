@@ -363,7 +363,6 @@ function PlanSummary({ plan, onCreateNewPlan }) {
             tracking and logging.
           </p>
         </div>
-        <CompanionMascot size="small" caption="Plan companion" />
       </div>
 
       {plan.warning && <div className="warning-note">Heads up: {plan.warning}</div>}
