@@ -398,3 +398,18 @@ body,
   background: transparent !important;
   color: #ffffff !important;
 }
+
+.auth-input-shell:focus-within {
+  border-color: rgba(124, 255, 107, 0.75);
+  box-shadow:
+    0 0 0 3px rgba(124, 255, 107, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.07);
+}
+.auth-page .auth-field input,
+.auth-page .auth-field input:focus,
+.auth-page .auth-field input:active {
+  outline: none !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  background: transparent !important;
+}

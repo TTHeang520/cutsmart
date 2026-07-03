@@ -11,6 +11,7 @@ function Register() {
   const [messageType, setMessageType] = useState("error");
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  
 
   async function handleSubmit(event) {
     event.preventDefault();
@@ -114,7 +115,7 @@ function Register() {
                   onClick={() => setShowPassword((currentValue) => !currentValue)}
                   aria-label={showPassword ? "Hide password" : "Show password"}
                 >
-                  ◉
+                  {showPassword ? "◌" : "◎"}
                 </button>
               </span>
             </label>
