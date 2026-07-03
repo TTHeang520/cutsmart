@@ -1,6 +1,5 @@
 import { useMemo, useState } from "react";
 import { Link, Navigate } from "react-router-dom";
-import CompanionMascot from "../components/CompanionMascot";
 import WeightLineChart from "../components/WeightLineChart";
 
 function WeightTrack() {
@@ -78,16 +77,13 @@ function WeightTrack() {
   return (
     <main className="tracker-page weight-track-page">
       <section className="tracker-shell weight-track-shell">
-        <header className="tracker-header weight-track-header">
-          <Link className="weight-back-button" to="/dashboard" aria-label="Back to dashboard">
-            ←
-          </Link>
+        <header className="tracker-header weight-track-header app-log-header">
           <div>
             <h1>Weight Track</h1>
             <p>Track your weight trend and stay on course.</p>
           </div>
           <div className="weight-header-actions">
-            <CompanionMascot size="medium" />
+            <Link to="/dashboard"><span aria-hidden="true">▦</span>Dashboard</Link>
           </div>
         </header>
 
