@@ -778,6 +778,58 @@ def save_food_log(user_id, journey_id, food_data):
 
     connection.commit()
     connection.close()
+def get_food_entry(food_id, user_id, journey_id):
+    connection = get_db_connection()
+    cursor = connection.cursor()
+
+    cursor.execute(
+        """
+        SELECT *
+        FROM food_logs
+        WHERE id = ?
+            AND user_id = ?
+            AND journey_id = ?
+        """,
+        (food_id, user_id, journey_id)
+    )
+
+    food = cursor.fetchone()
+    connection.close()
+
+    return food
+
+def update_food_photo_path(
+    food_id,
+    user_id,
+    journey_id,
+    photo_path
+):
+    connection = get_db_connection()
+    cursor = connection.cursor()
+
+    cursor.execute(
+        """
+        UPDATE food_logs
+        SET
+            photo_path = ?,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+            AND user_id = ?
+            AND journey_id = ?
+        """,
+        (
+            photo_path,
+            food_id,
+            user_id,
+            journey_id
+        )
+    )
+
+    updated_rows = cursor.rowcount
+    connection.commit()
+    connection.close()
+
+    return updated_rows
 
 def get_food_history(user_id, journey_id):
     connection = get_db_connection()

@@ -2,14 +2,73 @@ import json
 import sqlite3
 from datetime import date, time
 
-from flask import Flask, request
+from flask import Flask, request, send_from_directory
 from flask_cors import CORS
-from database import init_db, create_user, get_user_from_email, get_active_journey, start_new_journey, update_journey_initial_weight, save_user_plan, get_latest_user_plan, save_weight_log, get_weight_history, get_weight_by_date, get_latest_weight, save_food_log, get_food_history, get_food_logs_by_date, update_food_log, delete_food_log, save_exercise_log, get_exercise_history, get_exercise_logs_by_date, update_exercise_log, delete_exercise_log, get_user_journeys, get_journey_for_user, get_plans_by_journey
+from database import init_db, create_user, get_user_from_email, get_active_journey, start_new_journey, update_journey_initial_weight, save_user_plan, get_latest_user_plan, save_weight_log, get_weight_history, get_weight_by_date, get_latest_weight, save_food_log, get_food_history, get_food_logs_by_date, update_food_log, delete_food_log, save_exercise_log, get_exercise_history, get_exercise_logs_by_date, update_exercise_log, delete_exercise_log, get_user_journeys, get_journey_for_user, get_plans_by_journey, get_food_entry, update_food_photo_path
 from planner import generate_plan
+from werkzeug.exceptions import RequestEntityTooLarge
 from werkzeug.security import generate_password_hash, check_password_hash
+from pathlib import Path
+from uuid import uuid4
+from PIL import Image, UnidentifiedImageError
 
 app = Flask(__name__)
 CORS(app)
+FOOD_PHOTO_FOLDER = (
+    Path(__file__).resolve().parent
+    / "uploads"
+    / "food_photos"
+)
+
+ALLOWED_IMAGE_EXTENSIONS = {
+    "jpg",
+    "jpeg",
+    "png",
+    "webp"
+}
+
+MAX_IMAGE_SIZE = 5 * 1024 * 1024
+
+FOOD_PHOTO_FOLDER.mkdir(
+    parents=True,
+    exist_ok=True
+)
+
+app.config["MAX_CONTENT_LENGTH"] = MAX_IMAGE_SIZE
+
+@app.errorhandler(RequestEntityTooLarge)
+def handle_large_upload(error):
+    return {
+        "success": False,
+        "message": "Photo must not exceed 5 MB"
+    }, 413
+
+def allowed_image_file(filename):
+    return (
+        "." in filename
+        and filename.rsplit(".", 1)[1].lower()
+        in ALLOWED_IMAGE_EXTENSIONS
+    )
+
+def detect_image_extension(photo):
+    try:
+        image = Image.open(photo.stream)
+        image.verify()
+
+        image_format = image.format.lower()
+        photo.stream.seek(0)
+    except (UnidentifiedImageError, OSError):
+        photo.stream.seek(0)
+        return None
+
+    format_extensions = {
+        "jpeg": "jpg",
+        "png": "png",
+        "webp": "webp"
+    }
+
+    return format_extensions.get(image_format)
+
 init_db()
 
 
@@ -566,28 +625,186 @@ def weight_by_date(user_id):
         "weight": dict(weight)
     }
 
-@app.route(
-    "/api/users/<int:user_id>/journeys/<int:journey_id>/foods",
-    methods=["GET"]
-)
-def journey_food_history(user_id, journey_id):
-    journey = get_journey_for_user(user_id, journey_id)
+@app.route("/api/foods/<int:food_id>/photo", methods=["POST"])
+def upload_food_photo(food_id):
+    user_id = request.form.get("user_id")
+    photo = request.files.get("photo")
+
+    if not user_id:
+        return {
+            "success": False,
+            "message": "User id is required"
+        }, 400
+
+    try:
+        user_id = int(user_id)
+    except (TypeError, ValueError):
+        return {
+            "success": False,
+            "message": "User id must be a number"
+        }, 400
+
+    if photo is None or not photo.filename:
+        return {
+            "success": False,
+            "message": "Photo is required"
+        }, 400
+
+    if not allowed_image_file(photo.filename):
+        return {
+            "success": False,
+            "message": "Photo must be a JPG, JPEG, PNG, or WebP image"
+        }, 400
+
+    journey = get_active_journey(user_id)
 
     if journey is None:
         return {
             "success": False,
-            "message": "Journey not found"
+            "message": "Active journey not found. Create a plan first"
         }, 404
 
-    history = get_food_history(user_id, journey_id)
+    food = get_food_entry(
+        food_id,
+        user_id,
+        journey["id"]
+    )
+
+    if food is None:
+        return {
+            "success": False,
+            "message": "Food entry not found"
+        }, 404
+
+    old_photo_path = food["photo_path"]
+
+    extension = detect_image_extension(photo)
+
+    if extension is None:
+        return {
+            "success": False,
+            "message": "Uploaded file is not a valid JPG, PNG, or WebP image"
+        }, 400
+    filename = f"{uuid4().hex}.{extension}"
+
+    file_path = FOOD_PHOTO_FOLDER / filename
+    photo.save(file_path)
+
+    stored_path = f"food_photos/{filename}"
+
+    updated_rows = update_food_photo_path(
+        food_id,
+        user_id,
+        journey["id"],
+        stored_path
+    )
+
+    if updated_rows == 0:
+        file_path.unlink(missing_ok=True)
+
+        return {
+            "success": False,
+            "message": "Food entry not found"
+        }, 404
+
+    if old_photo_path:
+        old_filename = Path(old_photo_path).name
+        old_file_path = FOOD_PHOTO_FOLDER / old_filename
+
+        if old_file_path != file_path:
+            old_file_path.unlink(missing_ok=True)
 
     return {
         "success": True,
-        "message": "Journey food history fetched successfully",
-        "journey": dict(journey),
-        "foods": [dict(row) for row in history]
+        "message": "Food photo uploaded successfully",
+        "photo_path": stored_path,
+        "photo_url": f"/api/uploads/{stored_path}"
     }
 
+@app.route("/api/foods/<int:food_id>/photo", methods=["DELETE"])
+def delete_food_photo(food_id):
+    data = request.get_json(silent=True)
+
+    if data is None:
+        return {
+            "success": False,
+            "message": "Request body must be JSON"
+        }, 400
+
+    user_id = data.get("user_id")
+
+    if user_id in ("", None):
+        return {
+            "success": False,
+            "message": "User id is required"
+        }, 400
+
+    try:
+        user_id = int(user_id)
+    except (TypeError, ValueError):
+        return {
+            "success": False,
+            "message": "User id must be a number"
+        }, 400
+
+    journey = get_active_journey(user_id)
+
+    if journey is None:
+        return {
+            "success": False,
+            "message": "Active journey not found. Create a plan first"
+        }, 404
+
+    food = get_food_entry(
+        food_id,
+        user_id,
+        journey["id"]
+    )
+
+    if food is None:
+        return {
+            "success": False,
+            "message": "Food entry not found"
+        }, 404
+
+    if not food["photo_path"]:
+        return {
+            "success": False,
+            "message": "Food photo not found"
+        }, 404
+
+    filename = Path(food["photo_path"]).name
+    file_path = FOOD_PHOTO_FOLDER / filename
+
+    updated_rows = update_food_photo_path(
+        food_id,
+        user_id,
+        journey["id"],
+        None
+    )
+
+    if updated_rows == 0:
+        return {
+            "success": False,
+            "message": "Food entry not found"
+        }, 404
+
+    file_path.unlink(missing_ok=True)
+
+    return {
+        "success": True,
+        "message": "Food photo deleted successfully"
+    }
+
+@app.route(
+    "/api/uploads/<path:photo_path>",
+    methods=["GET"]
+)
+def serve_uploaded_photo(photo_path):
+    return send_from_directory(
+        FOOD_PHOTO_FOLDER.parent,
+        photo_path
+    )
 
 @app.route("/api/foods", methods=["POST"])
 def create_food_log():
@@ -728,6 +945,8 @@ def create_food_log():
         }
     }
 
+
+
 @app.route("/api/foods/history/<int:user_id>", methods=["GET"])
 def food_history(user_id):
     journey = get_active_journey(user_id)
@@ -744,6 +963,28 @@ def food_history(user_id):
         "success": True,
         "message": "Food history fetched successfully",
         "history": [dict(row) for row in history]
+    }
+
+@app.route(
+    "/api/users/<int:user_id>/journeys/<int:journey_id>/foods",
+    methods=["GET"]
+)
+def journey_food_history(user_id, journey_id):
+    journey = get_journey_for_user(user_id, journey_id)
+
+    if journey is None:
+        return {
+            "success": False,
+            "message": "Journey not found"
+        }, 404
+
+    history = get_food_history(user_id, journey_id)
+
+    return {
+        "success": True,
+        "message": "Journey food history fetched successfully",
+        "journey": dict(journey),
+        "foods": [dict(row) for row in history]
     }
 
 @app.route("/api/foods/<int:user_id>", methods=["GET"])

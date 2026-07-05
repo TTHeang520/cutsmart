@@ -1121,7 +1121,9 @@ Required fields are `user_id`, `food_name`, `calories`, `meal_type`, `logged_dat
 
 Optional fields are `protein_g`, `carbs_g`, `fat_g`, and `notes`. Unknown optional values return `null`.
 
-`photo_path` is reserved for the future photo-upload feature. It currently returns `null` because photo uploading is not implemented yet.
+`photo_path` is optional. New food entries initially return `null`. After the food entry is created, the frontend may upload one JPG, JPEG, PNG, or WebP photo for that food entry using the separate photo-upload route.
+
+Each food entry supports one photo. Uploading another photo replaces the database path and deletes the previous physical image.
 
 Allowed meal types:
 
@@ -1240,6 +1242,221 @@ Common errors include:
   "message": "User not found"
 }
 ```
+
+## Upload Or Replace Food Photo
+
+Route:
+
+```text
+POST /api/foods/<food_id>/photo
+```
+
+Example full route:
+
+```text
+http://127.0.0.1:5000/api/foods/4/photo
+```
+
+The food entry must belong to the user and the user's active journey.
+
+This request must use `multipart/form-data`, not JSON. It must contain:
+
+```text
+user_id → text form field
+photo   → uploaded image file
+```
+
+Example frontend request:
+
+```javascript
+const formData = new FormData();
+formData.append("user_id", user.id);
+formData.append("photo", selectedFile);
+
+fetch(`/api/foods/${foodId}/photo`, {
+  method: "POST",
+  body: formData
+});
+```
+
+Do not manually set the `Content-Type` header when using `FormData`; the browser adds the required multipart boundary.
+
+Allowed image formats:
+
+```text
+JPG
+JPEG
+PNG
+WebP
+```
+
+The maximum request size is 5 MB. The backend validates both the filename extension and the actual image contents.
+
+The backend generates a unique filename, saves the physical file under `backend/uploads/food_photos`, and stores a portable relative path in `food_logs.photo_path`.
+
+### For Success Response
+
+```json
+{
+  "success": true,
+  "message": "Food photo uploaded successfully",
+  "photo_path": "food_photos/49f1961230fd4e27af90572e95d5efd4.jpg",
+  "photo_url": "/api/uploads/food_photos/49f1961230fd4e27af90572e95d5efd4.jpg"
+}
+```
+
+If the food entry already has a photo, a successful upload replaces `photo_path` and removes the previous physical file.
+
+### For Error Responses
+
+Missing user ID:
+
+```json
+{
+  "success": false,
+  "message": "User id is required"
+}
+```
+
+Invalid user ID:
+
+```json
+{
+  "success": false,
+  "message": "User id must be a number"
+}
+```
+
+Missing photo:
+
+```json
+{
+  "success": false,
+  "message": "Photo is required"
+}
+```
+
+Unsupported filename extension:
+
+```json
+{
+  "success": false,
+  "message": "Photo must be a JPG, JPEG, PNG, or WebP image"
+}
+```
+
+Invalid or fake image contents:
+
+```json
+{
+  "success": false,
+  "message": "Uploaded file is not a valid JPG, PNG, or WebP image"
+}
+```
+
+Oversized request:
+
+```json
+{
+  "success": false,
+  "message": "Photo must not exceed 5 MB"
+}
+```
+
+No active journey:
+
+```json
+{
+  "success": false,
+  "message": "Active journey not found. Create a plan first"
+}
+```
+
+Food entry not found or does not belong to the active journey:
+
+```json
+{
+  "success": false,
+  "message": "Food entry not found"
+}
+```
+
+## Display Uploaded Food Photo
+
+Route:
+
+```text
+GET /api/uploads/<photo_path>
+```
+
+Example full route:
+
+```text
+http://127.0.0.1:5000/api/uploads/food_photos/49f1961230fd4e27af90572e95d5efd4.jpg
+```
+
+This route returns the actual image bytes from the upload directory. The frontend can use the URL as an image source:
+
+```jsx
+<img src={`${backendBaseUrl}${photoUrl}`} alt="Food" />
+```
+
+If the physical file does not exist, Flask returns `404`.
+
+## Delete Food Photo
+
+Route:
+
+```text
+DELETE /api/foods/<food_id>/photo
+```
+
+Example full route:
+
+```text
+http://127.0.0.1:5000/api/foods/4/photo
+```
+
+This request uses JSON:
+
+```json
+{
+  "user_id": 1
+}
+```
+
+The backend verifies the active journey and food ownership, changes `photo_path` to `NULL`, and deletes the physical image file.
+
+### For Success Response
+
+```json
+{
+  "success": true,
+  "message": "Food photo deleted successfully"
+}
+```
+
+### For Error Responses
+
+Missing JSON body:
+
+```json
+{
+  "success": false,
+  "message": "Request body must be JSON"
+}
+```
+
+Photo already missing:
+
+```json
+{
+  "success": false,
+  "message": "Food photo not found"
+}
+```
+
+The delete route may also return the user ID, active journey, and food-entry errors documented for the upload route.
 
 ## Fetch Food History
 
