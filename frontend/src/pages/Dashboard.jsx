@@ -180,11 +180,17 @@ function Dashboard() {
                     <span>{user.email || "No email saved"}</span>
                   </div>
 
-                  <button type="button" onClick={() => setIsProfileMenuOpen(false)}>
-                    Account / Profile
-                  </button>
-                  <Link to="/settings" onClick={() => setIsProfileMenuOpen(false)}>
-                    Settings
+                  <Link to="/profile" onClick={() => setIsProfileMenuOpen(false)}>
+                    Profile
+                  </Link>
+                  <Link to="/plan" onClick={() => setIsProfileMenuOpen(false)}>
+                    Current Journey
+                  </Link>
+                  <Link to="/journey-history" onClick={() => setIsProfileMenuOpen(false)}>
+                    Journey History
+                  </Link>
+                  <Link to="/activity-history" onClick={() => setIsProfileMenuOpen(false)}>
+                    Activity History
                   </Link>
                   <button type="button" className="logout-menu-item" onClick={handleLogout}>
                     Log out

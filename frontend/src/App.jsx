@@ -12,6 +12,9 @@ import AppLayout from "./components/AppLayout";
 import AuthLayout from "./components/AuthLayout";
 import Reports from "./pages/Reports";
 import Settings from "./pages/Settings";
+import JourneyHistory from "./pages/JourneyHistory";
+import JourneyOverview from "./pages/JourneyOverview";
+import SimplePlaceholder from "./pages/SimplePlaceholder";
 import "./App.css";
 
 
@@ -33,6 +36,26 @@ function App() {
         <Route path="/calendar" element={<Calendar />} />
         <Route path="/reports" element={<Reports />} />
         <Route path="/settings" element={<Settings />} />
+        <Route path="/journey-history" element={<JourneyHistory />} />
+        <Route path="/journeys/:journeyId" element={<JourneyOverview />} />
+        <Route
+          path="/profile"
+          element={
+            <SimplePlaceholder
+              title="Profile Coming Soon"
+              subtitle="Your profile settings will live here."
+            />
+          }
+        />
+        <Route
+          path="/activity-history"
+          element={
+            <SimplePlaceholder
+              title="Activity History Coming Soon"
+              subtitle="Your food, workout, and weight activity timeline will live here."
+            />
+          }
+        />
       </Route>
     </Routes>
   );
