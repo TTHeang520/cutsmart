@@ -506,6 +506,24 @@ def get_user_journeys(user_id):
 
     return journeys
 
+def get_journey_for_user(user_id, journey_id):
+    connection = get_db_connection()
+    cursor = connection.cursor()
+
+    cursor.execute(
+        """
+        SELECT *
+        FROM plan_journeys
+        WHERE id = ? AND user_id = ?
+        """,
+        (journey_id, user_id)
+    )
+
+    journey = cursor.fetchone()
+    connection.close()
+
+    return journey
+
 def get_plans_by_journey(user_id, journey_id):
     connection = get_db_connection()
     cursor = connection.cursor()

@@ -4,7 +4,7 @@ from datetime import date, time
 
 from flask import Flask, request
 from flask_cors import CORS
-from database import init_db, create_user, get_user_from_email, get_active_journey, start_new_journey, update_journey_initial_weight, save_user_plan, get_latest_user_plan, save_weight_log, get_weight_history, get_weight_by_date, get_latest_weight, save_food_log, get_food_history, get_food_logs_by_date, update_food_log, delete_food_log, save_exercise_log, get_exercise_history, get_exercise_logs_by_date, update_exercise_log, delete_exercise_log, get_user_journeys, get_plans_by_journey
+from database import init_db, create_user, get_user_from_email, get_active_journey, start_new_journey, update_journey_initial_weight, save_user_plan, get_latest_user_plan, save_weight_log, get_weight_history, get_weight_by_date, get_latest_weight, save_food_log, get_food_history, get_food_logs_by_date, update_food_log, delete_food_log, save_exercise_log, get_exercise_history, get_exercise_logs_by_date, update_exercise_log, delete_exercise_log, get_user_journeys, get_journey_for_user, get_plans_by_journey
 from planner import generate_plan
 from werkzeug.security import generate_password_hash, check_password_hash
 
@@ -370,6 +370,30 @@ def plans_by_journey(user_id, journey_id):
         "plans": plan_list
     }
 
+
+@app.route(
+    "/api/users/<int:user_id>/journeys/<int:journey_id>/weights",
+    methods=["GET"]
+)
+def journey_weight_history(user_id, journey_id):
+    journey = get_journey_for_user(user_id, journey_id)
+
+    if journey is None:
+        return {
+            "success": False,
+            "message": "Journey not found"
+        }, 404
+
+    history = get_weight_history(user_id, journey_id)
+
+    return {
+        "success": True,
+        "message": "Journey weight history fetched successfully",
+        "journey": dict(journey),
+        "weights": [dict(row) for row in history]
+    }
+
+
 @app.route("/api/weights", methods=["POST"])
 def create_weight_log():
     data = request.get_json()
@@ -541,6 +565,29 @@ def weight_by_date(user_id):
         "date": logged_date,
         "weight": dict(weight)
     }
+
+@app.route(
+    "/api/users/<int:user_id>/journeys/<int:journey_id>/foods",
+    methods=["GET"]
+)
+def journey_food_history(user_id, journey_id):
+    journey = get_journey_for_user(user_id, journey_id)
+
+    if journey is None:
+        return {
+            "success": False,
+            "message": "Journey not found"
+        }, 404
+
+    history = get_food_history(user_id, journey_id)
+
+    return {
+        "success": True,
+        "message": "Journey food history fetched successfully",
+        "journey": dict(journey),
+        "foods": [dict(row) for row in history]
+    }
+
 
 @app.route("/api/foods", methods=["POST"])
 def create_food_log():
@@ -929,6 +976,29 @@ def delete_food_entry(food_id):
         "success": True,
         "message": "Food entry deleted successfully"
     }
+
+@app.route(
+    "/api/users/<int:user_id>/journeys/<int:journey_id>/exercises",
+    methods=["GET"]
+)
+def journey_exercise_history(user_id, journey_id):
+    journey = get_journey_for_user(user_id, journey_id)
+
+    if journey is None:
+        return {
+            "success": False,
+            "message": "Journey not found"
+        }, 404
+
+    history = get_exercise_history(user_id, journey_id)
+
+    return {
+        "success": True,
+        "message": "Journey exercise history fetched successfully",
+        "journey": dict(journey),
+        "exercises": [dict(row) for row in history]
+    }
+
 
 @app.route("/api/exercises", methods=["POST"])
 def create_exercise_log():

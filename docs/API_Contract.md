@@ -672,6 +672,184 @@ Each plan object also contains the other plan fields documented in **Fetch Lates
 
 If the journey has no matching plans or does not belong to the supplied user, the route returns `success: true` with an empty `plans` array.
 
+## Fetch Logs From One Journey
+
+These read-only routes return logs from one selected journey. They work with both active and archived journeys.
+
+The frontend supplies both `user_id` and `journey_id`. Before returning logs, the backend verifies that the journey exists and belongs to that user.
+
+These routes do not update or delete archived data.
+
+### Journey Weight History
+
+Route:
+
+```text
+GET /api/users/<user_id>/journeys/<journey_id>/weights
+```
+
+Example full route:
+
+```text
+http://127.0.0.1:5000/api/users/1/journeys/2/weights
+```
+
+Success response:
+
+```json
+{
+  "success": true,
+  "message": "Journey weight history fetched successfully",
+  "journey": {
+    "id": 2,
+    "user_id": 1,
+    "initial_weight_kg": 80,
+    "target_weight_kg": 72,
+    "status": "archived",
+    "started_at": "2026-06-24 17:48:30",
+    "ended_at": "2026-07-04 10:30:00"
+  },
+  "weights": [
+    {
+      "id": 5,
+      "user_id": 1,
+      "journey_id": 2,
+      "weight_kg": 77.9,
+      "logged_date": "2026-06-30",
+      "created_at": "2026-06-30 09:00:00",
+      "updated_at": "2026-06-30 09:00:00"
+    }
+  ]
+}
+```
+
+### Journey Food History
+
+Route:
+
+```text
+GET /api/users/<user_id>/journeys/<journey_id>/foods
+```
+
+Example full route:
+
+```text
+http://127.0.0.1:5000/api/users/1/journeys/2/foods
+```
+
+Success response:
+
+```json
+{
+  "success": true,
+  "message": "Journey food history fetched successfully",
+  "journey": {
+    "id": 2,
+    "user_id": 1,
+    "initial_weight_kg": 80,
+    "target_weight_kg": 72,
+    "status": "archived",
+    "started_at": "2026-06-24 17:48:30",
+    "ended_at": "2026-07-04 10:30:00"
+  },
+  "foods": [
+    {
+      "id": 12,
+      "user_id": 1,
+      "journey_id": 2,
+      "food_name": "Chicken rice",
+      "calories": 650,
+      "meal_type": "lunch",
+      "logged_date": "2026-07-02",
+      "logged_time": "12:30",
+      "notes": "Less rice",
+      "photo_path": null
+    }
+  ]
+}
+```
+
+Food objects also contain the optional macro fields and timestamps documented in the Food Log section.
+
+### Journey Exercise History
+
+Route:
+
+```text
+GET /api/users/<user_id>/journeys/<journey_id>/exercises
+```
+
+Example full route:
+
+```text
+http://127.0.0.1:5000/api/users/1/journeys/2/exercises
+```
+
+Success response:
+
+```json
+{
+  "success": true,
+  "message": "Journey exercise history fetched successfully",
+  "journey": {
+    "id": 2,
+    "user_id": 1,
+    "initial_weight_kg": 80,
+    "target_weight_kg": 72,
+    "status": "archived",
+    "started_at": "2026-06-24 17:48:30",
+    "ended_at": "2026-07-04 10:30:00"
+  },
+  "exercises": [
+    {
+      "id": 7,
+      "user_id": 1,
+      "journey_id": 2,
+      "exercise_name": "Running",
+      "duration_minutes": 30,
+      "calories_burned": 300,
+      "logged_date": "2026-07-02",
+      "logged_time": "18:00",
+      "notes": "Slow pace run"
+    }
+  ]
+}
+```
+
+Exercise objects also contain the timestamps documented in the Exercise Log section.
+
+### Empty Log History
+
+When the journey exists but has no records of the requested type, the route returns `success: true` with an empty array:
+
+```json
+{
+  "success": true,
+  "message": "Journey food history fetched successfully",
+  "journey": {
+    "id": 2,
+    "user_id": 1,
+    "initial_weight_kg": 80,
+    "target_weight_kg": 72,
+    "status": "archived",
+    "started_at": "2026-06-24 17:48:30",
+    "ended_at": "2026-07-04 10:30:00"
+  },
+  "foods": []
+}
+```
+
+### Journey Not Found
+
+If the journey does not exist or belongs to another user, the route returns:
+
+```json
+{
+  "success": false,
+  "message": "Journey not found"
+}
+```
+
 ## Weight Log
 
 Weight Log allows a registered user to record body weight by date inside the user's active journey.
