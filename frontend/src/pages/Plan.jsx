@@ -88,6 +88,7 @@ function Plan() {
   const [isLoading, setIsLoading] = useState(false);
   const [isCheckingSavedPlan, setIsCheckingSavedPlan] = useState(Boolean(userId && !savedPlan));
   const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false);
+  const [planSaveMode, setPlanSaveMode] = useState(savedPlan ? "update" : "new");
 
   useEffect(() => {
     if (!userId || plan) {
@@ -107,6 +108,7 @@ function Plan() {
 
         localStorage.setItem(getLatestPlanKey({ id: userId }), JSON.stringify(data.plan));
         setPlan(data.plan);
+        setPlanSaveMode("update");
         setHasStarted(true);
         setPlanView("summary");
       } catch {
@@ -164,6 +166,8 @@ function Plan() {
     setCurrentStep(0);
     setHasStarted(true);
     setIsAccountMenuOpen(false);
+    // A user choosing Create New Plan from an existing plan starts a fresh journey.
+    setPlanSaveMode("new");
   }
 
   function goNext() {
@@ -218,13 +222,17 @@ function Plan() {
         return;
       }
 
-      setPlan(data.plan);
-      localStorage.setItem(getLatestPlanKey(user), JSON.stringify(data.plan));
-      await saveGeneratedPlan(user, requestBody, data.plan);
+      // New users and "Create New Plan" use mode "new"; edits to the current plan use "update".
+      const saveMode = planSaveMode;
+      const savedPlan = await saveGeneratedPlan(user, saveMode, requestBody, data.plan);
+
+      setPlan(savedPlan);
+      localStorage.setItem(getLatestPlanKey(user), JSON.stringify(savedPlan));
+      setPlanSaveMode("update");
       setPlanView("result");
       setMessage(data.message || "Plan generated successfully");
-    } catch {
-      setMessage("Could not connect to the server.");
+    } catch (error) {
+      setMessage(error.message || "Could not connect to the server.");
     } finally {
       setIsLoading(false);
     }
@@ -317,6 +325,8 @@ function Plan() {
               setPlanView("result");
               setCurrentStep(totalSteps - 1);
               setHasStarted(true);
+              // Returning to review edits the just-saved current journey instead of starting another one.
+              setPlanSaveMode("update");
             }}
             onBackResult={() => setResultStep(Math.max(resultStep - 1, 0))}
             onNext={() => setResultStep(resultStep + 1)}
@@ -326,6 +336,8 @@ function Plan() {
               setPlanView("result");
               setCurrentStep(0);
               setHasStarted(false);
+              // Restarting after a result creates a fresh journey when the next plan is saved.
+              setPlanSaveMode("new");
             }}
           />
         )}
@@ -964,26 +976,38 @@ function ResultStat({ label, value }) {
   );
 }
 
-async function saveGeneratedPlan(user, inputData, planResult) {
+async function saveGeneratedPlan(user, mode, inputData, planResult) {
   if (!user?.id) {
-    return;
+    throw new Error("You must be logged in before saving a plan.");
   }
 
-  try {
-    await fetch("/api/plans/save", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        user_id: user.id,
-        input_data: inputData,
-        plan_result: planResult,
-      }),
-    });
-  } catch {
-    // The localStorage save above keeps plan generation usable if saving fails.
+  const response = await fetch("/api/plans/save", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      user_id: user.id,
+      mode,
+      input_data: inputData,
+      plan_result: planResult,
+    }),
+  });
+
+  const data = await response.json().catch(() => ({
+    success: false,
+    message: `Save plan API returned status ${response.status}.`,
+  }));
+
+  if (!response.ok || data.success === false) {
+    throw new Error(data.message || "Could not save your plan.");
   }
+
+  return {
+    ...planResult,
+    journey_id: data.journey_id,
+    plan_id: data.plan_id,
+  };
 }
 
 function isStepComplete(step, formData) {
