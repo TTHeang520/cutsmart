@@ -167,7 +167,7 @@ function JourneyHistory() {
 
 function CurrentJourneyCard({ journey, latestPlan, weightHistory }) {
   const startingWeight = latestPlan?.current_weight_kg || weightHistory[0]?.weight_kg || journey.initial_weight_kg;
-  const latestWeight = weightHistory[weightHistory.length - 1]?.weight_kg;
+  const latestWeight = weightHistory[weightHistory.length - 1]?.weight_kg || startingWeight;
   const targetWeight = latestPlan?.target_weight_kg || journey.target_weight_kg;
   const progress = getGoalProgress(startingWeight, latestWeight, targetWeight);
 
@@ -247,10 +247,6 @@ function ArchivedJourneyCard({ journey, displayNumber }) {
 
         <div className="journey-action-row">
           <Link to={`/journeys/${journey.id}`}>View</Link>
-          {/* TODO: enable after backend adds POST /api/users/<user_id>/journeys/<journey_id>/restore */}
-          <button type="button" className="journey-disabled-button" disabled>
-            Continue Journey Coming Soon
-          </button>
         </div>
       </div>
     </article>

@@ -13,6 +13,8 @@ function Dashboard() {
   const [latestPlan, setLatestPlan] = useState(() => getStoredLatestPlan(user));
   const [isCheckingPlan, setIsCheckingPlan] = useState(Boolean(userId));
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
+  const [isPlanDetailsOpen, setIsPlanDetailsOpen] = useState(false);
+  const [isStartJourneyConfirmOpen, setIsStartJourneyConfirmOpen] = useState(false);
   const profileMenuRef = useRef(null);
   const weightHistory = getStoredWeightEntries(user);
   const today = getToday();
@@ -78,6 +80,17 @@ function Dashboard() {
   function handleLogout() {
     localStorage.removeItem("user");
     navigate("/login");
+  }
+
+  function handleModifyPlan() {
+    navigate("/plan", { state: { planIntent: "modify" } });
+  }
+
+  function handleStartNewJourney() {
+    saveJourneyArchiveSnapshot(user, latestPlan);
+    resetActiveJourneyTracking(user);
+    setIsStartJourneyConfirmOpen(false);
+    navigate("/plan", { state: { planIntent: "new" } });
   }
 
   if (!user) {
@@ -336,10 +349,25 @@ function Dashboard() {
             </p>
           </div>
           <div className="plan-summary-button-row">
-            <Link to="/plan">View Plan Details</Link>
-            <Link to="/plan">Create New Plan</Link>
+            <button type="button" onClick={() => setIsPlanDetailsOpen(true)}>View Plan</button>
+            <button type="button" onClick={() => setIsStartJourneyConfirmOpen(true)}>Start New Journey</button>
           </div>
         </section>
+
+        {isPlanDetailsOpen && (
+          <PlanDetailsModal
+            plan={latestPlan}
+            onClose={() => setIsPlanDetailsOpen(false)}
+            onModify={handleModifyPlan}
+          />
+        )}
+
+        {isStartJourneyConfirmOpen && (
+          <ConfirmStartJourneyModal
+            onCancel={() => setIsStartJourneyConfirmOpen(false)}
+            onConfirm={handleStartNewJourney}
+          />
+        )}
 
         <nav className="daily-dashboard-bottom-nav" aria-label="Dashboard navigation placeholder">
           <Link className="active" to="/dashboard">Today</Link>
@@ -350,6 +378,113 @@ function Dashboard() {
         </nav>
       </section>
     </main>
+  );
+}
+
+function PlanDetailsModal({ plan, onClose, onModify }) {
+  return (
+    <div className="dashboard-modal-backdrop" role="presentation" onMouseDown={onClose}>
+      <section
+        className="dashboard-plan-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="dashboard-plan-modal-title"
+        onMouseDown={(event) => event.stopPropagation()}
+      >
+        <div className="dashboard-modal-header">
+          <div>
+            <span className="daily-dashboard-eyebrow">Current plan</span>
+            <h2 id="dashboard-plan-modal-title">View Plan</h2>
+          </div>
+          <button type="button" onClick={onClose} aria-label="Close plan details">×</button>
+        </div>
+
+        {plan ? (
+          <>
+            <div className="dashboard-plan-detail-grid">
+              <PlanDetail label="Strategy" value={formatLabel(plan.strategy)} />
+              <PlanDetail label="Maintenance calories" value={formatKcal(plan.maintenance_calories)} />
+              <PlanDetail label="Target calories" value={formatKcal(plan.target_calories)} />
+              <PlanDetail label="Daily deficit" value={formatKcal(plan.daily_deficit)} />
+              <PlanDetail label="Diet deficit" value={formatKcal(plan.diet_deficit)} />
+              <PlanDetail label="Exercise deficit" value={formatKcal(plan.exercise_deficit)} />
+              <PlanDetail label="Current BMI" value={formatBmi(plan.current_bmi, plan.current_bmi_category)} />
+              <PlanDetail label="Target BMI" value={formatBmi(plan.target_bmi, plan.target_bmi_category)} />
+              <PlanDetail label="Protein" value={formatGram(plan.protein_g)} />
+              <PlanDetail label="Carbs" value={formatGram(plan.carbs_g)} />
+              <PlanDetail label="Fat" value={formatGram(plan.fat_g)} />
+              <PlanDetail label="Recommended timeline" value={formatWeeks(plan.recommended_timeline_weeks)} />
+              <PlanDetail label="Timeline status" value={formatLabel(plan.timeline_status)} />
+            </div>
+
+            {plan.warning && (
+              <div className="dashboard-plan-note">
+                <strong>Warning</strong>
+                <p>{plan.warning}</p>
+              </div>
+            )}
+
+            {plan.alternative_plan && (
+              <div className="dashboard-plan-note">
+                <strong>Alternative plan</strong>
+                <p>{formatAlternativePlan(plan.alternative_plan)}</p>
+              </div>
+            )}
+          </>
+        ) : (
+          <div className="dashboard-plan-note">
+            <strong>No plan found</strong>
+            <p>Create a plan to see details here.</p>
+          </div>
+        )}
+
+        <div className="dashboard-modal-actions">
+          <button type="button" onClick={onClose}>Close</button>
+          <button type="button" onClick={onModify}>Modify Plan</button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function ConfirmStartJourneyModal({ onCancel, onConfirm }) {
+  return (
+    <div className="dashboard-modal-backdrop" role="presentation" onMouseDown={onCancel}>
+      <section
+        className="dashboard-plan-modal dashboard-confirm-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="start-journey-title"
+        onMouseDown={(event) => event.stopPropagation()}
+      >
+        <div className="dashboard-modal-header">
+          <div>
+            <span className="daily-dashboard-eyebrow">New journey</span>
+            <h2 id="start-journey-title">Start New Journey?</h2>
+          </div>
+          <button type="button" onClick={onCancel} aria-label="Close confirmation">×</button>
+        </div>
+
+        <p className="dashboard-confirm-copy">
+          This will reset dashboard progress, streak, and calendar tracking for the new journey.
+          Your previous journeys will remain available in Journey History.
+        </p>
+
+        <div className="dashboard-modal-actions">
+          <button type="button" onClick={onCancel}>Cancel</button>
+          <button type="button" onClick={onConfirm}>Start Journey</button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function PlanDetail({ label, value }) {
+  return (
+    <div className="dashboard-plan-detail">
+      <span>{label}</span>
+      <strong>{value || "—"}</strong>
+    </div>
   );
 }
 
@@ -487,6 +622,92 @@ function getStoredEntries(storageKey) {
   }
 }
 
+function saveJourneyArchiveSnapshot(user, plan) {
+  if (!user?.id || !plan?.journey_id) {
+    return;
+  }
+
+  const snapshot = {
+    plan,
+    weights: getStoredWeightEntries(user),
+    foods: getStoredEntriesByPrefix(`cutsmart_food_log_${user.id}_`).map(normalizeFoodEntry),
+    exercises: getStoredEntriesByPrefix(`cutsmart_exercise_log_${user.id}_`).map(normalizeExerciseEntry),
+    saved_at: new Date().toISOString(),
+  };
+
+  localStorage.setItem(
+    `cutsmart_journey_snapshot_${user.id}_${plan.journey_id}`,
+    JSON.stringify(snapshot)
+  );
+}
+
+function getStoredEntriesByPrefix(prefix) {
+  const entries = [];
+
+  for (let index = 0; index < localStorage.length; index += 1) {
+    const key = localStorage.key(index);
+
+    if (!key?.startsWith(prefix)) {
+      continue;
+    }
+
+    const loggedDate = key.slice(prefix.length);
+    const savedEntries = getStoredEntries(key);
+
+    savedEntries.forEach((entry) => {
+      entries.push({ ...entry, logged_date: entry.logged_date || loggedDate });
+    });
+  }
+
+  return entries;
+}
+
+function normalizeFoodEntry(entry) {
+  return {
+    ...entry,
+    food_name: entry.food_name || entry.mealName,
+    calories: Number(entry.calories || 0),
+    logged_date: entry.logged_date || entry.createdAt?.slice(0, 10),
+  };
+}
+
+function normalizeExerciseEntry(entry) {
+  return {
+    ...entry,
+    exercise_name: entry.exercise_name || entry.exerciseName,
+    calories_burned: Number(entry.calories_burned ?? entry.caloriesBurned ?? 0),
+    duration_minutes: Number(entry.duration_minutes ?? entry.duration ?? 0),
+    category: entry.category || "other",
+    logged_date: entry.logged_date || entry.createdAt?.slice(0, 10),
+  };
+}
+
+function resetActiveJourneyTracking(user) {
+  if (!user?.id) {
+    return;
+  }
+
+  localStorage.removeItem(`cutsmart_weight_entries_${user.id}`);
+  removeStoredEntriesByPrefix(`cutsmart_food_log_${user.id}_`);
+  removeStoredEntriesByPrefix(`cutsmart_exercise_log_${user.id}_`);
+  removeStoredEntriesByPrefix(`cutsmart_calendar_${user.id}_`);
+  removeStoredEntriesByPrefix(`cutsmart_streak_${user.id}`);
+}
+
+function removeStoredEntriesByPrefix(prefix) {
+  const keysToRemove = [];
+
+  for (let index = 0; index < localStorage.length; index += 1) {
+    const key = localStorage.key(index);
+
+    if (key?.startsWith(prefix)) {
+      keysToRemove.push(key);
+    }
+  }
+
+  keysToRemove.forEach((key) => localStorage.removeItem(key));
+}
+
 function getToday() {
   return new Date().toISOString().slice(0, 10);
 }
@@ -510,6 +731,37 @@ function formatNumber(value) {
   return Number(value).toLocaleString(undefined, {
     maximumFractionDigits: 1,
   });
+}
+
+function formatKcal(value) {
+  return value === null || value === undefined || value === "" ? "—" : `${formatNumber(value)} kcal`;
+}
+
+function formatGram(value) {
+  return value === null || value === undefined || value === "" ? "—" : `${formatNumber(value)} g`;
+}
+
+function formatWeeks(value) {
+  return value === null || value === undefined || value === "" ? "—" : `${formatNumber(value)} weeks`;
+}
+
+function formatBmi(value, category) {
+  if (value === null || value === undefined || value === "") {
+    return "—";
+  }
+
+  return category ? `${formatNumber(value)} (${category})` : formatNumber(value);
+}
+
+function formatAlternativePlan(alternativePlan) {
+  if (!alternativePlan || typeof alternativePlan !== "object") {
+    return "—";
+  }
+
+  const dailyDeficit = formatKcal(alternativePlan.daily_deficit);
+  const timeline = formatWeeks(alternativePlan.recommended_timeline_weeks);
+
+  return `${dailyDeficit} daily deficit · ${timeline}`;
 }
 
 export default Dashboard;

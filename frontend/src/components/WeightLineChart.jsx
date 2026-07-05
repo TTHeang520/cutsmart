@@ -5,6 +5,9 @@ function WeightLineChart({
   compact = false,
   sampleWhenEmpty = true,
   emptyText = "Add two entries to see your own graph.",
+  lineColor = "#d275ff",
+  markerColor = "#c66bff",
+  glowColor = "#c66bff",
 }) {
   const chartId = useId().replace(/:/g, "");
   const chartEntries = entries.length > 0 ? entries : sampleWhenEmpty ? getSampleEntries() : [];
@@ -47,7 +50,14 @@ function WeightLineChart({
   const hasRealEntries = entries.length > 0;
 
   return (
-    <div className={compact ? "weight-chart-wrap weight-chart-compact-wrap" : "weight-chart-wrap"}>
+    <div
+      className={compact ? "weight-chart-wrap weight-chart-compact-wrap" : "weight-chart-wrap"}
+      style={{
+        "--weight-line-color": lineColor,
+        "--weight-marker-color": markerColor,
+        "--weight-marker-glow-color": glowColor,
+      }}
+    >
       {!hasRealEntries && sampleWhenEmpty && (
         <p className="weight-chart-empty-note">
           Sample trend shown. Add entries to see your own graph.
@@ -68,7 +78,7 @@ function WeightLineChart({
       >
         <defs>
           <filter id={`${chartId}-marker-glow`} x="-80%" y="-80%" width="260%" height="260%">
-            <feDropShadow dx="0" dy="0" stdDeviation="4" floodColor="#C66BFF" floodOpacity="0.75" />
+            <feDropShadow dx="0" dy="0" stdDeviation="4" floodColor={glowColor} floodOpacity="0.75" />
           </filter>
           <clipPath id={`${chartId}-chart-clip`}>
             <rect

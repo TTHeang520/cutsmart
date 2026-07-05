@@ -18,7 +18,7 @@ function WeightTrack() {
     [history]
   );
   const startingWeight = latestPlan?.current_weight_kg || sortedHistory[0]?.weight_kg;
-  const latestWeight = sortedHistory[sortedHistory.length - 1]?.weight_kg;
+  const latestWeight = sortedHistory[sortedHistory.length - 1]?.weight_kg || startingWeight;
   const targetWeight = latestPlan?.target_weight_kg;
   const change = latestWeight && startingWeight ? latestWeight - startingWeight : null;
   const goalProgress = getGoalProgress(startingWeight, latestWeight, targetWeight);

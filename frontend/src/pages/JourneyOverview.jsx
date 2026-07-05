@@ -76,27 +76,46 @@ function JourneyOverview() {
     () => getStoredWeightEntries(localWeightStorageKey).sort((a, b) => a.logged_date.localeCompare(b.logged_date)),
     [localWeightStorageKey]
   );
-  const latestPlan = overview.plans[0] || null;
+  const journeySnapshot = useMemo(
+    () => getStoredJourneySnapshot(user, journeyId),
+    [journeyId, user?.id]
+  );
+  const snapshotWeights = useMemo(
+    () => [...(journeySnapshot?.weights || [])].sort((a, b) => a.logged_date.localeCompare(b.logged_date)),
+    [journeySnapshot]
+  );
+  const latestPlan = overview.plans[0] || journeySnapshot?.plan || null;
   const journey = overview.journey;
   const status = journey?.status || "not available";
   const isArchivedJourney = status === "archived";
-  const chartWeights = isArchivedJourney ? sortedWeights : localWeightHistory;
+  const chartWeights = isArchivedJourney
+    ? getArchivedWeightHistory(sortedWeights, snapshotWeights, localWeightHistory)
+    : localWeightHistory;
+  const journeyFoods = isArchivedJourney && journeySnapshot?.foods?.length
+    ? journeySnapshot.foods
+    : overview.foods;
+  const journeyExercises = isArchivedJourney && journeySnapshot?.exercises?.length
+    ? journeySnapshot.exercises
+    : overview.exercises;
   const startWeight = isArchivedJourney
     ? journey?.initial_weight_kg || latestPlan?.current_weight_kg || chartWeights[0]?.weight_kg
     : latestPlan?.current_weight_kg || chartWeights[0]?.weight_kg || journey?.initial_weight_kg;
-  const currentWeight = chartWeights[chartWeights.length - 1]?.weight_kg;
+  const currentWeight = chartWeights[chartWeights.length - 1]?.weight_kg || startWeight;
   const targetWeight = isArchivedJourney
     ? journey?.target_weight_kg || latestPlan?.target_weight_kg
     : latestPlan?.target_weight_kg || journey?.target_weight_kg;
   const progress = getGoalProgress(startWeight, currentWeight, targetWeight);
   const canShowProgress = progress !== null;
   const title = latestPlan?.strategy ? `${formatLabel(latestPlan.strategy)} Strategy` : "Journey";
-  const totalFoodCalories = sumBy(overview.foods, "calories");
-  const totalExerciseCalories = sumBy(overview.exercises, "calories_burned");
+  const chartColors = isArchivedJourney
+    ? { lineColor: "#d8b4fe", markerColor: "#d8b4fe", glowColor: "#a855f7" }
+    : { lineColor: "#7cff6b", markerColor: "#7cff6b", glowColor: "#7cff6b" };
+  const totalFoodCalories = sumBy(journeyFoods, "calories");
+  const totalExerciseCalories = sumBy(journeyExercises, "calories_burned");
   const trackedDays = countUniqueDates([
     ...chartWeights.map((entry) => entry.logged_date),
-    ...overview.foods.map((entry) => entry.logged_date),
-    ...overview.exercises.map((entry) => entry.logged_date),
+    ...journeyFoods.map((entry) => entry.logged_date),
+    ...journeyExercises.map((entry) => entry.logged_date),
   ]);
 
   if (!user) {
@@ -187,7 +206,13 @@ function JourneyOverview() {
               </div>
               {chartWeights.length > 0 ? (
                 <div className="journey-weight-grid">
-                  <WeightLineChart entries={chartWeights} sampleWhenEmpty={false} />
+                  <WeightLineChart
+                    entries={chartWeights}
+                    sampleWhenEmpty={false}
+                    lineColor={chartColors.lineColor}
+                    markerColor={chartColors.markerColor}
+                    glowColor={chartColors.glowColor}
+                  />
                   <div className="journey-weight-facts">
                     <JourneyFact label="Start weight" value={formatKg(startWeight)} />
                     <JourneyFact label="Current weight" value={formatKg(currentWeight)} highlight />
@@ -204,24 +229,24 @@ function JourneyOverview() {
               <SummaryPanel
                 title="Food Summary"
                 items={[
-                  ["Total meals", overview.foods.length],
-                  ["Average calories", overview.foods.length ? formatKcal(totalFoodCalories / overview.foods.length) : "—"],
-                  ["Total logged", overview.foods.length ? formatKcal(totalFoodCalories) : "—"],
+                  ["Total meals", journeyFoods.length],
+                  ["Average calories", journeyFoods.length ? formatKcal(totalFoodCalories / journeyFoods.length) : "—"],
+                  ["Total logged", journeyFoods.length ? formatKcal(totalFoodCalories) : "—"],
                 ]}
                 emptyTitle="No food records available."
                 emptyText="Meals logged for this journey will appear here."
-                hasData={overview.foods.length > 0}
+                hasData={journeyFoods.length > 0}
               />
               <SummaryPanel
                 title="Exercise Summary"
                 items={[
-                  ["Total workouts", overview.exercises.length],
-                  ["Calories burned", overview.exercises.length ? formatKcal(totalExerciseCalories) : "—"],
-                  ["Categories", overview.exercises.length ? countExerciseCategories(overview.exercises) : "—"],
+                  ["Total workouts", journeyExercises.length],
+                  ["Calories burned", journeyExercises.length ? formatKcal(totalExerciseCalories) : "—"],
+                  ["Categories", journeyExercises.length ? countExerciseCategories(journeyExercises) : "—"],
                 ]}
                 emptyTitle="No workouts recorded for this journey."
                 emptyText="Exercise records for this journey will appear here."
-                hasData={overview.exercises.length > 0}
+                hasData={journeyExercises.length > 0}
               />
             </div>
 
@@ -229,8 +254,8 @@ function JourneyOverview() {
               <h2>Journey Highlights</h2>
               <div className="journey-highlights-grid">
                 <HighlightCard icon="▢" label="Weight Lost" value={formatWeightLost(startWeight, currentWeight)} />
-                <HighlightCard icon="◌" label="Total Calories Logged" value={overview.foods.length ? formatNumber(totalFoodCalories) : "—"} />
-                <HighlightCard icon="✦" label="Total Workouts" value={overview.exercises.length ? overview.exercises.length : "—"} />
+                <HighlightCard icon="◌" label="Total Calories Logged" value={journeyFoods.length ? formatNumber(totalFoodCalories) : "—"} />
+                <HighlightCard icon="✦" label="Total Workouts" value={journeyExercises.length ? journeyExercises.length : "—"} />
                 <HighlightCard icon="▦" label="Days Tracked" value={trackedDays || "—"} />
               </div>
             </section>
@@ -359,6 +384,40 @@ function getStoredWeightEntries(storageKey) {
   } catch {
     return [];
   }
+}
+
+function getStoredJourneySnapshot(user, journeyId) {
+  if (!user?.id || !journeyId) {
+    return null;
+  }
+
+  const rawSnapshot = localStorage.getItem(`cutsmart_journey_snapshot_${user.id}_${journeyId}`);
+
+  if (!rawSnapshot) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(rawSnapshot);
+  } catch {
+    return null;
+  }
+}
+
+function getArchivedWeightHistory(backendWeights, snapshotWeights, localWeights) {
+  if (snapshotWeights.length > 0) {
+    return snapshotWeights;
+  }
+
+  if (backendWeights.length > 1) {
+    return backendWeights;
+  }
+
+  if (localWeights.length > backendWeights.length) {
+    return localWeights;
+  }
+
+  return backendWeights;
 }
 
 function getJourneyInsight(canShowProgress, progress) {
