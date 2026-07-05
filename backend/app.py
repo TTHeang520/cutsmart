@@ -4,7 +4,7 @@ from datetime import date, time
 
 from flask import Flask, request
 from flask_cors import CORS
-from database import init_db, create_user, get_user_from_email, save_user_plan, get_latest_user_plan, save_weight_log, get_weight_history, get_weight_by_date, get_latest_weight, save_food_log, get_food_history, get_food_logs_by_date, update_food_log, delete_food_log, save_exercise_log, get_exercise_history, get_exercise_logs_by_date, update_exercise_log, delete_exercise_log
+from database import init_db, create_user, get_user_from_email, get_active_journey, start_new_journey, update_journey_initial_weight, save_user_plan, get_latest_user_plan, save_weight_log, get_weight_history, get_weight_by_date, get_latest_weight, save_food_log, get_food_history, get_food_logs_by_date, update_food_log, delete_food_log, save_exercise_log, get_exercise_history, get_exercise_logs_by_date, update_exercise_log, delete_exercise_log, get_user_journeys, get_journey_for_user, get_plans_by_journey
 from planner import generate_plan
 from werkzeug.security import generate_password_hash, check_password_hash
 
@@ -215,6 +215,13 @@ def save_plan():
     user_id = data.get("user_id")
     input_data = data.get("input_data")
     plan_result = data.get("plan_result")
+    mode = data.get("mode", "update")
+
+    if mode not in ("update", "new"):
+        return {
+            "success": False,
+            "message": "Mode must be update or new"
+        }, 400
 
     if not user_id or not input_data or not plan_result:
         return {
@@ -266,11 +273,42 @@ def save_plan():
                 "message": "Plan result is missing required fields"
             }, 400
 
-    save_user_plan(user_id, input_data, plan_result)
+    journey = get_active_journey(user_id)
+
+    if journey is None:
+        mode = "new"
+
+    try:
+        if mode == "new":
+            result = start_new_journey(
+                user_id,
+                input_data["current_weight_kg"],
+                input_data["target_weight_kg"],
+                input_data,
+                plan_result
+            )
+            journey_id = result["journey"]["id"]
+            plan_id = result["plan_id"]
+        else:
+            journey_id = journey["id"]
+            plan_id = save_user_plan(
+                user_id,
+                journey_id,
+                input_data,
+                plan_result
+            )
+    except sqlite3.IntegrityError:
+        return {
+            "success": False,
+            "message": "User not found"
+        }, 404
 
     return {
         "success": True,
-        "message": "Plan saved successfully"
+        "message": "Plan saved successfully",
+        "mode": mode,
+        "journey_id": journey_id,
+        "plan_id": plan_id
     }
 
 
@@ -294,6 +332,67 @@ def latest_plan(user_id):
         "message": "Latest plan fetched successfully",
         "plan": plan_data
     }
+
+
+@app.route("/api/journeys/history/<int:user_id>", methods=["GET"])
+def journey_history(user_id):
+    journeys = get_user_journeys(user_id)
+
+    return {
+        "success": True,
+        "message": "Journey history fetched successfully",
+        "journeys": [dict(journey) for journey in journeys]
+    }
+
+
+@app.route(
+    "/api/users/<int:user_id>/journeys/<int:journey_id>/plans",
+    methods=["GET"]
+)
+def plans_by_journey(user_id, journey_id):
+    plans = get_plans_by_journey(user_id, journey_id)
+
+    plan_list = []
+
+    for plan in plans:
+        plan_data = dict(plan)
+
+        if plan_data["alternative_plan"]:
+            plan_data["alternative_plan"] = json.loads(
+                plan_data["alternative_plan"]
+            )
+
+        plan_list.append(plan_data)
+
+    return {
+        "success": True,
+        "message": "Journey plans fetched successfully",
+        "plans": plan_list
+    }
+
+
+@app.route(
+    "/api/users/<int:user_id>/journeys/<int:journey_id>/weights",
+    methods=["GET"]
+)
+def journey_weight_history(user_id, journey_id):
+    journey = get_journey_for_user(user_id, journey_id)
+
+    if journey is None:
+        return {
+            "success": False,
+            "message": "Journey not found"
+        }, 404
+
+    history = get_weight_history(user_id, journey_id)
+
+    return {
+        "success": True,
+        "message": "Journey weight history fetched successfully",
+        "journey": dict(journey),
+        "weights": [dict(row) for row in history]
+    }
+
 
 @app.route("/api/weights", methods=["POST"])
 def create_weight_log():
@@ -344,8 +443,23 @@ def create_weight_log():
             "message": "Logged date must use YYYY-MM-DD format"
         }, 400
 
+    journey = get_active_journey(user_id)
+
+    if journey is None:
+        return {
+            "success": False,
+            "message": "Active journey not found. Create a plan first"
+        }, 404
+
     try:
-        save_weight_log(user_id, weight_kg, logged_date)
+        save_weight_log(user_id, journey["id"], weight_kg, logged_date)
+
+        if logged_date == journey["started_at"][:10]:
+            update_journey_initial_weight(
+                journey["id"],
+                user_id,
+                weight_kg
+            )
     except sqlite3.IntegrityError:
         return {
             "success": False,
@@ -357,6 +471,7 @@ def create_weight_log():
         "message": "Weight recorded successfully",
         "weight": {
             "user_id": user_id,
+            "journey_id": journey["id"],
             "weight_kg": weight_kg,
             "logged_date": logged_date
         }
@@ -364,7 +479,15 @@ def create_weight_log():
 
 @app.route("/api/weights/history/<int:user_id>", methods=["GET"])
 def weight_history(user_id):
-    history = get_weight_history(user_id)
+    journey = get_active_journey(user_id)
+
+    if journey is None:
+        return {
+            "success": False,
+            "message": "Active journey not found. Create a plan first"
+        }, 404
+
+    history = get_weight_history(user_id, journey["id"])
     
     return {
         "success": True,
@@ -374,7 +497,15 @@ def weight_history(user_id):
 
 @app.route("/api/weights/latest/<int:user_id>", methods=["GET"])
 def latest_weight(user_id):
-    latest = get_latest_weight(user_id)
+    journey = get_active_journey(user_id)
+
+    if journey is None:
+        return {
+            "success": False,
+            "message": "Active journey not found. Create a plan first"
+        }, 404
+
+    latest = get_latest_weight(user_id, journey["id"])
 
     if latest is None:
         return {
@@ -412,7 +543,15 @@ def weight_by_date(user_id):
             "message": "Date must use YYYY-MM-DD format"
         }, 400
 
-    weight = get_weight_by_date(user_id, logged_date)
+    journey = get_active_journey(user_id)
+
+    if journey is None:
+        return {
+            "success": False,
+            "message": "Active journey not found. Create a plan first"
+        }, 404
+
+    weight = get_weight_by_date(user_id, journey["id"], logged_date)
 
     if weight is None:
         return {
@@ -426,6 +565,29 @@ def weight_by_date(user_id):
         "date": logged_date,
         "weight": dict(weight)
     }
+
+@app.route(
+    "/api/users/<int:user_id>/journeys/<int:journey_id>/foods",
+    methods=["GET"]
+)
+def journey_food_history(user_id, journey_id):
+    journey = get_journey_for_user(user_id, journey_id)
+
+    if journey is None:
+        return {
+            "success": False,
+            "message": "Journey not found"
+        }, 404
+
+    history = get_food_history(user_id, journey_id)
+
+    return {
+        "success": True,
+        "message": "Journey food history fetched successfully",
+        "journey": dict(journey),
+        "foods": [dict(row) for row in history]
+    }
+
 
 @app.route("/api/foods", methods=["POST"])
 def create_food_log():
@@ -531,8 +693,16 @@ def create_food_log():
 
     data["photo_path"] = None
 
+    journey = get_active_journey(user_id)
+
+    if journey is None:
+        return {
+            "success": False,
+            "message": "Active journey not found. Create a plan first"
+        }, 404
+
     try:
-        save_food_log(user_id, data)
+        save_food_log(user_id, journey["id"], data)
     except sqlite3.IntegrityError:
         return {
             "success": False,
@@ -544,6 +714,7 @@ def create_food_log():
         "message": "Food recorded successfully",
         "food": {
             "user_id": user_id,
+            "journey_id": journey["id"],
             "food_name": data["food_name"],
             "calories": data["calories"],
             "meal_type": data["meal_type"],
@@ -559,7 +730,15 @@ def create_food_log():
 
 @app.route("/api/foods/history/<int:user_id>", methods=["GET"])
 def food_history(user_id):
-    history = get_food_history(user_id)
+    journey = get_active_journey(user_id)
+
+    if journey is None:
+        return {
+            "success": False,
+            "message": "Active journey not found. Create a plan first"
+        }, 404
+
+    history = get_food_history(user_id, journey["id"])
 
     return {
         "success": True,
@@ -591,7 +770,15 @@ def foods_by_date(user_id):
             "message": "Date must use YYYY-MM-DD format"
         }, 400
 
-    food_logs = get_food_logs_by_date(user_id, logged_date)
+    journey = get_active_journey(user_id)
+
+    if journey is None:
+        return {
+            "success": False,
+            "message": "Active journey not found. Create a plan first"
+        }, 404
+
+    food_logs = get_food_logs_by_date(user_id, journey["id"], logged_date)
 
     total_calories = sum(row["calories"] for row in food_logs)
 
@@ -703,7 +890,15 @@ def update_food_entry(food_id):
             "message": "Macro values must be numbers"
         }, 400
 
-    updated_rows = update_food_log(food_id, user_id, data)
+    journey = get_active_journey(user_id)
+
+    if journey is None:
+        return {
+            "success": False,
+            "message": "Active journey not found. Create a plan first"
+        }, 404
+
+    updated_rows = update_food_log(food_id, user_id, journey["id"], data)
 
     if updated_rows == 0:
         return {
@@ -761,7 +956,15 @@ def delete_food_entry(food_id):
             "message": "User id must be positive"
         }, 400
 
-    deleted_rows = delete_food_log(food_id, user_id)
+    journey = get_active_journey(user_id)
+
+    if journey is None:
+        return {
+            "success": False,
+            "message": "Active journey not found. Create a plan first"
+        }, 404
+
+    deleted_rows = delete_food_log(food_id, user_id, journey["id"])
 
     if deleted_rows == 0:
         return {
@@ -773,6 +976,29 @@ def delete_food_entry(food_id):
         "success": True,
         "message": "Food entry deleted successfully"
     }
+
+@app.route(
+    "/api/users/<int:user_id>/journeys/<int:journey_id>/exercises",
+    methods=["GET"]
+)
+def journey_exercise_history(user_id, journey_id):
+    journey = get_journey_for_user(user_id, journey_id)
+
+    if journey is None:
+        return {
+            "success": False,
+            "message": "Journey not found"
+        }, 404
+
+    history = get_exercise_history(user_id, journey_id)
+
+    return {
+        "success": True,
+        "message": "Journey exercise history fetched successfully",
+        "journey": dict(journey),
+        "exercises": [dict(row) for row in history]
+    }
+
 
 @app.route("/api/exercises", methods=["POST"])
 def create_exercise_log():
@@ -848,8 +1074,16 @@ def create_exercise_log():
             "message": "Logged time must use HH:MM format"
         }, 400
 
+    journey = get_active_journey(user_id)
+
+    if journey is None:
+        return {
+            "success": False,
+            "message": "Active journey not found. Create a plan first"
+        }, 404
+
     try:
-        save_exercise_log(user_id, data)
+        save_exercise_log(user_id, journey["id"], data)
     except sqlite3.IntegrityError:
         return {
             "success": False,
@@ -861,6 +1095,7 @@ def create_exercise_log():
         "message": "Exercise recorded successfully",
         "exercise": {
             "user_id": user_id,
+            "journey_id": journey["id"],
             "exercise_name": data["exercise_name"],
             "duration_minutes": data["duration_minutes"],
             "calories_burned": data["calories_burned"],
@@ -872,7 +1107,15 @@ def create_exercise_log():
 
 @app.route("/api/exercises/history/<int:user_id>", methods=["GET"])
 def exercise_history(user_id):
-    history = get_exercise_history(user_id)
+    journey = get_active_journey(user_id)
+
+    if journey is None:
+        return {
+            "success": False,
+            "message": "Active journey not found. Create a plan first"
+        }, 404
+
+    history = get_exercise_history(user_id, journey["id"])
 
     return {
         "success": True,
@@ -904,7 +1147,15 @@ def exercises_by_date(user_id):
             "message": "Date must use YYYY-MM-DD format"
         }, 400
 
-    exercise_logs = get_exercise_logs_by_date(user_id, logged_date)
+    journey = get_active_journey(user_id)
+
+    if journey is None:
+        return {
+            "success": False,
+            "message": "Active journey not found. Create a plan first"
+        }, 404
+
+    exercise_logs = get_exercise_logs_by_date(user_id, journey["id"], logged_date)
     total_duration = sum(row["duration_minutes"] for row in exercise_logs)
     total_calories = sum(row["calories_burned"] for row in exercise_logs)
 
@@ -994,7 +1245,20 @@ def update_exercise_entry(exercise_id):
             "message": "Logged time must use HH:MM format"
         }, 400
 
-    updated_rows = update_exercise_log(exercise_id, user_id, data)
+    journey = get_active_journey(user_id)
+
+    if journey is None:
+        return {
+            "success": False,
+            "message": "Active journey not found. Create a plan first"
+        }, 404
+
+    updated_rows = update_exercise_log(
+        exercise_id,
+        user_id,
+        journey["id"],
+        data
+    )
 
     if updated_rows == 0:
         return {
@@ -1049,7 +1313,15 @@ def delete_exercise_entry(exercise_id):
             "message": "User id must be positive"
         }, 400
 
-    deleted_rows = delete_exercise_log(exercise_id, user_id)
+    journey = get_active_journey(user_id)
+
+    if journey is None:
+        return {
+            "success": False,
+            "message": "Active journey not found. Create a plan first"
+        }, 404
+
+    deleted_rows = delete_exercise_log(exercise_id, user_id, journey["id"])
 
     if deleted_rows == 0:
         return {
