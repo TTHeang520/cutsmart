@@ -4,3 +4,4 @@ backend/cutsmart_database
 *.db
 ~$*.docx
 docs/*.docx
+backend/uploads/
