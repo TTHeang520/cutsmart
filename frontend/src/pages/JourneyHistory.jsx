@@ -1,19 +1,18 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, Navigate, useNavigate } from "react-router-dom";
+import { getWeightStats } from "../utils/weightUtils";
+
+const API_BASE_URL = "http://127.0.0.1:5000";
 
 function JourneyHistory() {
   const navigate = useNavigate();
   const savedUser = localStorage.getItem("user");
   const user = savedUser ? JSON.parse(savedUser) : null;
   const latestPlan = getStoredLatestPlan(user);
-  const weightStorageKey = user ? `cutsmart_weight_entries_${user.id}` : "";
   const [journeys, setJourneys] = useState([]);
+  const [activeWeightHistory, setActiveWeightHistory] = useState([]);
   const [isLoading, setIsLoading] = useState(Boolean(user?.id));
   const [error, setError] = useState("");
-  const weightHistory = useMemo(
-    () => getStoredWeightEntries(weightStorageKey).sort((a, b) => a.logged_date.localeCompare(b.logged_date)),
-    [weightStorageKey]
-  );
 
   useEffect(() => {
     if (!user?.id) {
@@ -27,22 +26,20 @@ function JourneyHistory() {
       setIsLoading(true);
 
       try {
-        const response = await fetch(`http://127.0.0.1:5000/api/journeys/history/${user.id}`);
-        const data = await response.json();
+        const [journeyData, weightData] = await Promise.all([
+          fetchRequiredJson(`${API_BASE_URL}/api/journeys/history/${user.id}`),
+          fetchOptionalJson(`${API_BASE_URL}/api/weights/history/${user.id}`),
+        ]);
 
         if (!isCurrent) {
           return;
         }
 
-        if (!response.ok || data.success === false) {
-          setError(data.message || "Could not load journey history.");
-          return;
-        }
-
-        setJourneys(Array.isArray(data.journeys) ? data.journeys : []);
-      } catch {
+        setJourneys(Array.isArray(journeyData.journeys) ? journeyData.journeys : []);
+        setActiveWeightHistory(Array.isArray(weightData?.history) ? weightData.history : []);
+      } catch (requestError) {
         if (isCurrent) {
-          setError("Could not connect to the server.");
+          setError(requestError.message || "Could not connect to the server.");
         }
       } finally {
         if (isCurrent) {
@@ -115,7 +112,7 @@ function JourneyHistory() {
           <CurrentJourneyCard
             journey={activeJourney}
             latestPlan={latestPlan}
-            weightHistory={weightHistory}
+            weightHistory={activeWeightHistory}
           />
         )}
 
@@ -166,10 +163,7 @@ function JourneyHistory() {
 }
 
 function CurrentJourneyCard({ journey, latestPlan, weightHistory }) {
-  const startingWeight = latestPlan?.current_weight_kg || weightHistory[0]?.weight_kg || journey.initial_weight_kg;
-  const latestWeight = weightHistory[weightHistory.length - 1]?.weight_kg || startingWeight;
-  const targetWeight = latestPlan?.target_weight_kg || journey.target_weight_kg;
-  const progress = getGoalProgress(startingWeight, latestWeight, targetWeight);
+  const stats = getWeightStats({ weights: weightHistory, plan: latestPlan, journey });
 
   return (
     <section className="journey-current-card">
@@ -192,9 +186,9 @@ function CurrentJourneyCard({ journey, latestPlan, weightHistory }) {
           label="Weight"
           value={
             <>
-              {formatNumber(startingWeight)} kg
+              {formatNumber(stats.startWeight)} kg
               <span className="journey-arrow">→</span>
-              <span className="journey-target-value">{formatNumber(targetWeight)} kg</span>
+              <span className="journey-target-value">{formatNumber(stats.targetWeight)} kg</span>
             </>
           }
         />
@@ -202,14 +196,14 @@ function CurrentJourneyCard({ journey, latestPlan, weightHistory }) {
           label="Progress"
           value={
             <span className="journey-progress-stat">
-              <span>{formatNumber(progress)}%</span>
-              <i aria-hidden="true"><b style={{ width: `${progress}%` }} /></i>
+              <span>{formatNumber(stats.progressPercent)}%</span>
+              <i aria-hidden="true"><b style={{ width: `${stats.progressPercent}%` }} /></i>
             </span>
           }
         />
         <JourneyStat
           label="Target"
-          value={<span className="journey-target-value">{formatNumber(targetWeight)} kg</span>}
+          value={<span className="journey-target-value">{formatNumber(stats.targetWeight)} kg</span>}
           detail={formatActiveTimeline(journey.started_at)}
         />
       </div>
@@ -263,32 +257,25 @@ function JourneyStat({ label, value, icon, detail }) {
   );
 }
 
-function getGoalProgress(startingWeight, latestWeight, targetWeight) {
-  if (!startingWeight || !latestWeight || !targetWeight || startingWeight === targetWeight) {
-    return 0;
+async function fetchRequiredJson(url) {
+  const response = await fetch(url);
+  const data = await response.json().catch(() => ({
+    success: false,
+    message: `API returned status ${response.status}.`,
+  }));
+
+  if (!response.ok || data.success === false) {
+    throw new Error(data.message || "Could not load journey history.");
   }
 
-  const totalNeeded = Math.abs(startingWeight - targetWeight);
-  const completed = Math.abs(startingWeight - latestWeight);
-
-  return Math.min(Math.max((completed / totalNeeded) * 100, 0), 100);
+  return data;
 }
 
-function getStoredWeightEntries(storageKey) {
-  if (!storageKey) {
-    return [];
-  }
-
-  const rawEntries = localStorage.getItem(storageKey);
-
-  if (!rawEntries) {
-    return [];
-  }
-
+async function fetchOptionalJson(url) {
   try {
-    return JSON.parse(rawEntries);
+    return await fetchRequiredJson(url);
   } catch {
-    return [];
+    return null;
   }
 }
 

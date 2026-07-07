@@ -1,73 +1,88 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, Navigate } from "react-router-dom";
 import WeightLineChart from "../components/WeightLineChart";
+import { getWeightStats } from "../utils/weightUtils";
+
+const API_BASE_URL = "http://127.0.0.1:5000";
 
 function WeightTrack() {
   const savedUser = localStorage.getItem("user");
   const user = savedUser ? JSON.parse(savedUser) : null;
   const latestPlan = getStoredLatestPlan(user);
-  const storageKey = user ? `cutsmart_weight_entries_${user.id}` : "";
   const [weight, setWeight] = useState("");
   const [loggedDate, setLoggedDate] = useState(getToday());
   const [note, setNote] = useState("");
   const [activeRange, setActiveRange] = useState("W");
-  const [history, setHistory] = useState(() => getStoredWeightEntries(storageKey));
+  const [history, setHistory] = useState([]);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(Boolean(user?.id));
+  const [isSaving, setIsSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (!user?.id) {
+      return;
+    }
+
+    let isCurrent = true;
+
+    async function loadWeightHistory() {
+      setIsLoadingHistory(true);
+      setError("");
+
+      try {
+        const nextHistory = await fetchWeightHistory(user.id);
+
+        if (isCurrent) {
+          setHistory(nextHistory);
+        }
+      } catch (requestError) {
+        if (isCurrent) {
+          setHistory([]);
+          setError(requestError.message || "Could not load your weight history.");
+        }
+      } finally {
+        if (isCurrent) {
+          setIsLoadingHistory(false);
+        }
+      }
+    }
+
+    loadWeightHistory();
+
+    return () => {
+      isCurrent = false;
+    };
+  }, [user?.id]);
 
   const sortedHistory = useMemo(
     () => [...history].sort((a, b) => a.logged_date.localeCompare(b.logged_date)),
     [history]
   );
-  const startingWeight = latestPlan?.current_weight_kg || sortedHistory[0]?.weight_kg;
-  const latestWeight = sortedHistory[sortedHistory.length - 1]?.weight_kg || startingWeight;
-  const targetWeight = latestPlan?.target_weight_kg;
-  const change = latestWeight && startingWeight ? latestWeight - startingWeight : null;
-  const goalProgress = getGoalProgress(startingWeight, latestWeight, targetWeight);
-  const averageWeight = sortedHistory.length
-    ? sortedHistory.reduce((total, entry) => total + Number(entry.weight_kg), 0) / sortedHistory.length
-    : null;
-  const lowestEntry = sortedHistory.reduce(
-    (lowest, entry) => (!lowest || Number(entry.weight_kg) < Number(lowest.weight_kg) ? entry : lowest),
-    null
-  );
-  const highestEntry = sortedHistory.reduce(
-    (highest, entry) => (!highest || Number(entry.weight_kg) > Number(highest.weight_kg) ? entry : highest),
-    null
-  );
+  const weightStats = getWeightStats({ weights: sortedHistory, plan: latestPlan });
 
-  function handleSubmit(event) {
+  async function handleSubmit(event) {
     event.preventDefault();
+    setIsSaving(true);
+    setError("");
 
-    const nextEntry = {
-      id: `${loggedDate}-${Date.now()}`,
-      logged_date: loggedDate,
-      weight_kg: Number(weight),
-      note,
-    };
-    const withoutSameDate = history.filter((entry) => entry.logged_date !== loggedDate);
-    const nextHistory = [...withoutSameDate, nextEntry].sort((a, b) =>
-      b.logged_date.localeCompare(a.logged_date)
-    );
+    try {
+      await saveWeightEntry(user.id, Number(weight), loggedDate);
+      const nextHistory = await fetchWeightHistory(user.id);
 
-    setHistory(nextHistory);
-    localStorage.setItem(storageKey, JSON.stringify(nextHistory));
-    setWeight("");
-    setNote("");
+      setHistory(nextHistory);
+      setWeight("");
+      setNote("");
+    } catch (requestError) {
+      setError(requestError.message || "Could not save your weight entry.");
+    } finally {
+      setIsSaving(false);
+    }
   }
 
   function handleEdit(entry) {
     setLoggedDate(entry.logged_date);
     setWeight(String(entry.weight_kg));
     setNote(entry.note || "");
-    saveHistory(history.filter((item) => item.id !== entry.id));
-  }
-
-  function handleDelete(entryId) {
-    saveHistory(history.filter((entry) => entry.id !== entryId));
-  }
-
-  function saveHistory(nextHistory) {
-    setHistory(nextHistory);
-    localStorage.setItem(storageKey, JSON.stringify(nextHistory));
   }
 
   if (!user) {
@@ -91,31 +106,34 @@ function WeightTrack() {
           <TrackerMetric
             icon="▣"
             label="Average"
-            value={averageWeight ? `${formatNumber(averageWeight)} kg` : "--"}
-            detail={getDateRange(sortedHistory)}
+            value={weightStats.averageWeight ? `${formatNumber(weightStats.averageWeight)} kg` : "--"}
+            detail={getDateRange(weightStats.chartData)}
           />
           <TrackerMetric
             icon="↓"
             label="Change"
-            value={formatSignedWeight(change)}
+            value={formatSignedWeight(weightStats.weightChange)}
             detail="vs starting weight"
             tone="purple"
           />
           <TrackerMetric
             icon="⌁"
             label="Lowest"
-            value={lowestEntry ? `${formatNumber(lowestEntry.weight_kg)} kg` : "--"}
-            detail={lowestEntry?.logged_date || "No data yet"}
+            value={weightStats.lowestEntry ? `${formatNumber(weightStats.lowestEntry.weight_kg)} kg` : "--"}
+            detail={weightStats.lowestEntry?.logged_date || "No data yet"}
             tone="green"
           />
           <TrackerMetric
             icon="⌁"
             label="Highest"
-            value={highestEntry ? `${formatNumber(highestEntry.weight_kg)} kg` : "--"}
-            detail={highestEntry?.logged_date || "No data yet"}
+            value={weightStats.highestEntry ? `${formatNumber(weightStats.highestEntry.weight_kg)} kg` : "--"}
+            detail={weightStats.highestEntry?.logged_date || "No data yet"}
             tone="red"
           />
         </div>
+
+        {isLoadingHistory && <p className="app-log-empty">Loading weight history...</p>}
+        {error && <p className="app-log-empty" role="alert">{error}</p>}
 
         <section className="weight-chart-card">
           <div className="weight-range-tabs">
@@ -130,27 +148,27 @@ function WeightTrack() {
               </button>
             ))}
           </div>
-          <WeightLineChart entries={sortedHistory} />
+          <WeightLineChart entries={weightStats.chartData} />
         </section>
 
         <div className="weight-track-grid">
           <section className="about-weight-card">
             <h2>About you</h2>
-            <WeightFact label="Starting weight" value={startingWeight ? `${formatNumber(startingWeight)} kg` : "--"} />
-            <WeightFact label="Current weight" value={latestWeight ? `${formatNumber(latestWeight)} kg` : "--"} highlight />
-            <WeightFact label="Goal weight" value={targetWeight ? `${formatNumber(targetWeight)} kg` : "--"} />
+            <WeightFact label="Starting weight" value={weightStats.startWeight ? `${formatNumber(weightStats.startWeight)} kg` : "--"} />
+            <WeightFact label="Current weight" value={weightStats.latestWeight ? `${formatNumber(weightStats.latestWeight)} kg` : "--"} highlight />
+            <WeightFact label="Goal weight" value={weightStats.targetWeight ? `${formatNumber(weightStats.targetWeight)} kg` : "--"} />
             <WeightFact
               label="Total progress"
-              value={formatSignedWeight(change)}
+              value={formatSignedWeight(weightStats.weightChange)}
               highlight
             />
             <div className="weight-goal-progress">
               <div>
                 <span>Progress to goal</span>
-                <strong>{formatNumber(goalProgress)}%</strong>
+                <strong>{formatNumber(weightStats.progressPercent)}%</strong>
               </div>
               <div className="weight-goal-bar">
-                <span style={{ width: `${goalProgress}%` }} />
+                <span style={{ width: `${weightStats.progressPercent}%` }} />
               </div>
             </div>
           </section>
@@ -188,7 +206,9 @@ function WeightTrack() {
                 placeholder="Optional"
               />
             </label>
-            <button type="submit">Save Entry</button>
+            <button type="submit" disabled={isSaving}>
+              {isSaving ? "Saving..." : "Save Entry"}
+            </button>
           </form>
         </div>
 
@@ -209,9 +229,6 @@ function WeightTrack() {
                 </span>
                 <button type="button" onClick={() => handleEdit(entry)} aria-label="Edit weight entry">
                   Edit
-                </button>
-                <button type="button" onClick={() => handleDelete(entry.id)} aria-label="Delete weight entry">
-                  Delete
                 </button>
               </div>
             ))
@@ -240,17 +257,6 @@ function TrackerMetric({ icon, label, value, detail, tone = "default" }) {
       {detail && <small>{detail}</small>}
     </article>
   );
-}
-
-function getGoalProgress(startingWeight, latestWeight, targetWeight) {
-  if (!startingWeight || !latestWeight || !targetWeight || startingWeight === targetWeight) {
-    return 0;
-  }
-
-  const totalNeeded = Math.abs(startingWeight - targetWeight);
-  const completed = Math.abs(startingWeight - latestWeight);
-
-  return Math.min(Math.max((completed / totalNeeded) * 100, 0), 100);
 }
 
 function formatWeightDifference(entry, previousEntry) {
@@ -288,24 +294,6 @@ function getDateRange(entries) {
   return `${entries[0].logged_date} - ${entries[entries.length - 1].logged_date}`;
 }
 
-function getStoredWeightEntries(storageKey) {
-  if (!storageKey) {
-    return [];
-  }
-
-  const rawEntries = localStorage.getItem(storageKey);
-
-  if (!rawEntries) {
-    return [];
-  }
-
-  try {
-    return JSON.parse(rawEntries);
-  } catch {
-    return [];
-  }
-}
-
 function getStoredLatestPlan(user) {
   const rawPlan = localStorage.getItem(
     user?.id ? `cutsmart_latest_plan_${user.id}` : "cutsmart_latest_plan_guest"
@@ -330,6 +318,45 @@ function formatNumber(value) {
   return Number(value || 0).toLocaleString(undefined, {
     maximumFractionDigits: 1,
   });
+}
+
+async function fetchWeightHistory(userId) {
+  const response = await fetch(`${API_BASE_URL}/api/weights/history/${userId}`);
+  const data = await response.json().catch(() => ({
+    success: false,
+    message: `Weight history API returned status ${response.status}.`,
+  }));
+
+  if (!response.ok || data.success === false) {
+    throw new Error(data.message || "Could not load your weight history.");
+  }
+
+  return Array.isArray(data.history) ? data.history : [];
+}
+
+async function saveWeightEntry(userId, weightKg, loggedDate) {
+  const response = await fetch(`${API_BASE_URL}/api/weights`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      user_id: userId,
+      weight_kg: weightKg,
+      logged_date: loggedDate,
+    }),
+  });
+
+  const data = await response.json().catch(() => ({
+    success: false,
+    message: `Save weight API returned status ${response.status}.`,
+  }));
+
+  if (!response.ok || data.success === false) {
+    throw new Error(data.message || "Could not save your weight entry.");
+  }
+
+  return data.weight;
 }
 
 export default WeightTrack;

@@ -4,6 +4,9 @@ import HeroMascot from "../components/HeroMascot";
 import WeightLineChart from "../components/WeightLineChart";
 import dashboardMascot from "../assets/companions/dashboard_mascot.png";
 import { getJourneyTheme } from "../data/journeyThemes";
+import { getWeightStats } from "../utils/weightUtils";
+
+const API_BASE_URL = "http://127.0.0.1:5000";
 
 function Dashboard() {
   const navigate = useNavigate();
@@ -15,15 +18,14 @@ function Dashboard() {
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
   const [isPlanDetailsOpen, setIsPlanDetailsOpen] = useState(false);
   const [isStartJourneyConfirmOpen, setIsStartJourneyConfirmOpen] = useState(false);
+  const [weightHistory, setWeightHistory] = useState([]);
+  const [caloriesEaten, setCaloriesEaten] = useState(0);
+  const [caloriesBurned, setCaloriesBurned] = useState(0);
   const profileMenuRef = useRef(null);
-  const weightHistory = getStoredWeightEntries(user);
   const today = getToday();
-  const foodEntries = getStoredEntries(user ? `cutsmart_food_log_${user.id}_${today}` : "");
-  const exerciseEntries = getStoredEntries(user ? `cutsmart_exercise_log_${user.id}_${today}` : "");
-  const caloriesEaten = foodEntries.reduce((total, entry) => total + Number(entry.calories || 0), 0);
-  const caloriesBurned = exerciseEntries.reduce((total, entry) => total + Number(entry.caloriesBurned || 0), 0);
   const strategy = latestPlan?.strategy || "balanced";
   const theme = getJourneyTheme(strategy);
+  const weightStats = getWeightStats({ weights: weightHistory, plan: latestPlan });
 
   useEffect(() => {
     if (!userId) {
@@ -32,19 +34,34 @@ function Dashboard() {
 
     let isCurrent = true;
 
-    async function fetchLatestPlan() {
+    async function fetchDashboardData() {
       try {
-        const response = await fetch(`/api/plans/latest/${userId}`);
-        const data = await response.json();
+        const [planData, weightData, foodData, exerciseData] = await Promise.all([
+          fetchOptionalJson(`${API_BASE_URL}/api/plans/latest/${userId}`),
+          fetchOptionalJson(`${API_BASE_URL}/api/weights/history/${userId}`),
+          fetchOptionalJson(`${API_BASE_URL}/api/foods/${userId}?date=${today}`),
+          fetchOptionalJson(`${API_BASE_URL}/api/exercises/${userId}?date=${today}`),
+        ]);
 
-        if (!isCurrent || !response.ok || data.success === false || !data.plan) {
+        if (!isCurrent) {
           return;
         }
 
-        localStorage.setItem(getLatestPlanKey({ id: userId }), JSON.stringify(data.plan));
-        setLatestPlan(data.plan);
+        if (planData?.plan) {
+          localStorage.setItem(getLatestPlanKey({ id: userId }), JSON.stringify(planData.plan));
+          setLatestPlan(planData.plan);
+        }
+
+        setWeightHistory(Array.isArray(weightData?.history) ? weightData.history : []);
+        setCaloriesEaten(Number(foodData?.summary?.total_calories || 0));
+        setCaloriesBurned(Number(exerciseData?.summary?.total_calories_burned || 0));
       } catch {
-        // Keep the localStorage fallback if the saved-plan endpoint is unavailable.
+        // Keep the cached plan only. Active journey logs should not fall back to old localStorage data.
+        if (isCurrent) {
+          setWeightHistory([]);
+          setCaloriesEaten(0);
+          setCaloriesBurned(0);
+        }
       } finally {
         if (isCurrent) {
           setIsCheckingPlan(false);
@@ -52,12 +69,12 @@ function Dashboard() {
       }
     }
 
-    fetchLatestPlan();
+    fetchDashboardData();
 
     return () => {
       isCurrent = false;
     };
-  }, [userId]);
+  }, [userId, today]);
 
   useEffect(() => {
     if (!isProfileMenuOpen) {
@@ -282,7 +299,7 @@ function Dashboard() {
 
           <article className="dashboard-feature-card dashboard-weight-card">
             <span className="daily-dashboard-eyebrow">Weight</span>
-            <h2>{getLatestWeight(weightHistory) ? `${formatNumber(getLatestWeight(weightHistory).weight_kg)} kg` : "--"}</h2>
+            <h2>{weightStats.latestWeight ? `${formatNumber(weightStats.latestWeight)} kg` : "--"}</h2>
             <WeightPreview history={weightHistory} plan={latestPlan} />
             <Link to="/weight-track">Open Weight Track</Link>
           </article>
@@ -539,33 +556,38 @@ function MacroPill({ label, value }) {
 }
 
 function WeightPreview({ history, plan }) {
-  const sortedHistory = [...history].sort((a, b) => a.logged_date.localeCompare(b.logged_date));
-  const latest = sortedHistory[sortedHistory.length - 1];
-  const starting = sortedHistory[0];
+  const stats = getWeightStats({ weights: history, plan });
 
   return (
     <div className="weight-preview">
       <WeightLineChart
-        entries={sortedHistory}
+        entries={stats.chartData}
         compact
         sampleWhenEmpty={false}
         emptyText="Add weight entries to see your trend."
       />
       <div className="weight-preview-stats">
-        <MacroPill label="Latest" value={latest ? `${formatNumber(latest.weight_kg)} kg` : "--"} />
-        <MacroPill label="Start" value={starting ? `${formatNumber(starting.weight_kg)} kg` : "--"} />
-        <MacroPill label="Target" value={plan ? `${formatNumber(plan.target_weight_kg)} kg` : "--"} />
+        <MacroPill label="Latest" value={stats.latestWeight ? `${formatNumber(stats.latestWeight)} kg` : "--"} />
+        <MacroPill label="Start" value={stats.startWeight ? `${formatNumber(stats.startWeight)} kg` : "--"} />
+        <MacroPill label="Target" value={stats.targetWeight ? `${formatNumber(stats.targetWeight)} kg` : "--"} />
       </div>
     </div>
   );
 }
 
-function getLatestWeight(history) {
-  if (history.length === 0) {
+async function fetchOptionalJson(url) {
+  try {
+    const response = await fetch(url);
+    const data = await response.json();
+
+    if (!response.ok || data.success === false) {
+      return null;
+    }
+
+    return data;
+  } catch {
     return null;
   }
-
-  return [...history].sort((a, b) => a.logged_date.localeCompare(b.logged_date)).at(-1);
 }
 
 function getStoredLatestPlan(user) {

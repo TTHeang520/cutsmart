@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, Navigate, useNavigate, useParams } from "react-router-dom";
 import WeightLineChart from "../components/WeightLineChart";
+import { getWeightStats } from "../utils/weightUtils";
 
 const API_BASE_URL = "http://127.0.0.1:5000";
 
@@ -90,22 +91,15 @@ function JourneyOverview() {
   const isArchivedJourney = status === "archived";
   const chartWeights = isArchivedJourney
     ? getArchivedWeightHistory(sortedWeights, snapshotWeights, localWeightHistory)
-    : localWeightHistory;
+    : sortedWeights;
   const journeyFoods = isArchivedJourney && journeySnapshot?.foods?.length
     ? journeySnapshot.foods
     : overview.foods;
   const journeyExercises = isArchivedJourney && journeySnapshot?.exercises?.length
     ? journeySnapshot.exercises
     : overview.exercises;
-  const startWeight = isArchivedJourney
-    ? journey?.initial_weight_kg || latestPlan?.current_weight_kg || chartWeights[0]?.weight_kg
-    : latestPlan?.current_weight_kg || chartWeights[0]?.weight_kg || journey?.initial_weight_kg;
-  const currentWeight = chartWeights[chartWeights.length - 1]?.weight_kg || startWeight;
-  const targetWeight = isArchivedJourney
-    ? journey?.target_weight_kg || latestPlan?.target_weight_kg
-    : latestPlan?.target_weight_kg || journey?.target_weight_kg;
-  const progress = getGoalProgress(startWeight, currentWeight, targetWeight);
-  const canShowProgress = progress !== null;
+  const weightStats = getWeightStats({ weights: chartWeights, plan: latestPlan, journey });
+  const canShowProgress = Boolean(weightStats.startWeight && weightStats.latestWeight && weightStats.targetWeight);
   const title = latestPlan?.strategy ? `${formatLabel(latestPlan.strategy)} Strategy` : "Journey";
   const chartColors = isArchivedJourney
     ? { lineColor: "#d8b4fe", markerColor: "#d8b4fe", glowColor: "#a855f7" }
@@ -113,7 +107,7 @@ function JourneyOverview() {
   const totalFoodCalories = sumBy(journeyFoods, "calories");
   const totalExerciseCalories = sumBy(journeyExercises, "calories_burned");
   const trackedDays = countUniqueDates([
-    ...chartWeights.map((entry) => entry.logged_date),
+    ...weightStats.chartData.map((entry) => entry.logged_date),
     ...journeyFoods.map((entry) => entry.logged_date),
     ...journeyExercises.map((entry) => entry.logged_date),
   ]);
@@ -162,11 +156,11 @@ function JourneyOverview() {
                   <JourneyFact label="Current status" value={formatLabel(status)} />
                 </dl>
               </div>
-              <div className="journey-progress-ring" style={{ "--progress": `${canShowProgress ? progress : 0}%` }}>
+              <div className="journey-progress-ring" style={{ "--progress": `${canShowProgress ? weightStats.progressPercent : 0}%` }}>
                 <div className="journey-ring-content">
                   {canShowProgress ? (
                     <>
-                      <strong>{formatNumber(progress)}%</strong>
+                      <strong>{formatNumber(weightStats.progressPercent)}%</strong>
                       <span>Progress</span>
                     </>
                   ) : (
@@ -204,20 +198,20 @@ function JourneyOverview() {
                 <h2>Weight Progress</h2>
                 <span>All Time</span>
               </div>
-              {chartWeights.length > 0 ? (
+              {weightStats.chartData.length > 0 ? (
                 <div className="journey-weight-grid">
                   <WeightLineChart
-                    entries={chartWeights}
+                    entries={weightStats.chartData}
                     sampleWhenEmpty={false}
                     lineColor={chartColors.lineColor}
                     markerColor={chartColors.markerColor}
                     glowColor={chartColors.glowColor}
                   />
                   <div className="journey-weight-facts">
-                    <JourneyFact label="Start weight" value={formatKg(startWeight)} />
-                    <JourneyFact label="Current weight" value={formatKg(currentWeight)} highlight />
-                    <JourneyFact label="Goal weight" value={formatKg(targetWeight)} />
-                    <JourneyFact label="Remaining" value={formatRemainingWeight(currentWeight, targetWeight)} highlight />
+                    <JourneyFact label="Start weight" value={formatKg(weightStats.startWeight)} />
+                    <JourneyFact label="Current weight" value={formatKg(weightStats.latestWeight)} highlight />
+                    <JourneyFact label="Goal weight" value={formatKg(weightStats.targetWeight)} />
+                    <JourneyFact label="Remaining" value={formatKg(weightStats.remainingWeight)} highlight />
                   </div>
                 </div>
               ) : (
@@ -253,7 +247,7 @@ function JourneyOverview() {
             <section className="journey-overview-card">
               <h2>Journey Highlights</h2>
               <div className="journey-highlights-grid">
-                <HighlightCard icon="▢" label="Weight Lost" value={formatWeightLost(startWeight, currentWeight)} />
+                <HighlightCard icon="▢" label="Weight Lost" value={formatKg(weightStats.weightLost)} />
                 <HighlightCard icon="◌" label="Total Calories Logged" value={journeyFoods.length ? formatNumber(totalFoodCalories) : "—"} />
                 <HighlightCard icon="✦" label="Total Workouts" value={journeyExercises.length ? journeyExercises.length : "—"} />
                 <HighlightCard icon="▦" label="Days Tracked" value={trackedDays || "—"} />
@@ -264,7 +258,7 @@ function JourneyOverview() {
               <span aria-hidden="true">↗</span>
               <div>
                 <h2>Journey Insight</h2>
-                <p>{getJourneyInsight(canShowProgress, progress)}</p>
+                <p>{getJourneyInsight(canShowProgress, weightStats.progressPercent)}</p>
               </div>
             </section>
           </>
@@ -357,17 +351,6 @@ function JourneyEmptyState({ title, text, tone = "default" }) {
   );
 }
 
-function getGoalProgress(startingWeight, latestWeight, targetWeight) {
-  if (!startingWeight || !latestWeight || !targetWeight || startingWeight === targetWeight) {
-    return null;
-  }
-
-  const totalNeeded = Math.abs(startingWeight - targetWeight);
-  const completed = Math.abs(startingWeight - latestWeight);
-
-  return Math.min(Math.max((completed / totalNeeded) * 100, 0), 100);
-}
-
 function getStoredWeightEntries(storageKey) {
   if (!storageKey) {
     return [];
@@ -438,22 +421,6 @@ function formatTimelineWeeks(plan) {
   }
 
   return `${formatNumber(weeks)} ${Number(weeks) === 1 ? "week" : "weeks"}`;
-}
-
-function formatWeightLost(startWeight, currentWeight) {
-  if (!startWeight || !currentWeight) {
-    return "—";
-  }
-
-  return `${formatNumber(Math.max(Number(startWeight) - Number(currentWeight), 0))} kg`;
-}
-
-function formatRemainingWeight(currentWeight, targetWeight) {
-  if (!currentWeight || !targetWeight) {
-    return "—";
-  }
-
-  return `${formatNumber(Math.abs(Number(currentWeight) - Number(targetWeight)))} kg`;
 }
 
 function countExerciseCategories(exercises) {
