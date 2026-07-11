@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link, Navigate, useNavigate } from "react-router-dom";
+import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
 import CompanionMascot from "../components/CompanionMascot";
 import {
   calorieCaptions,
@@ -74,23 +74,36 @@ const strategyOptions = [
 
 function Plan() {
   const navigate = useNavigate();
+  const location = useLocation();
   const savedUser = localStorage.getItem("user");
   const user = savedUser ? JSON.parse(savedUser) : null;
   const userId = user?.id;
   const savedPlan = getStoredLatestPlan(user);
-  const [hasStarted, setHasStarted] = useState(Boolean(savedPlan));
-  const [formData, setFormData] = useState(startingForm);
+  const planIntent = location.state?.planIntent;
+  const isDashboardModify = planIntent === "modify" && Boolean(savedPlan);
+  const isDashboardNewJourney = planIntent === "new";
+  const [hasStarted, setHasStarted] = useState(
+    isDashboardModify || isDashboardNewJourney || Boolean(savedPlan)
+  );
+  const [formData, setFormData] = useState(
+    isDashboardModify ? getFormDataFromPlan(savedPlan) : startingForm
+  );
   const [currentStep, setCurrentStep] = useState(0);
-  const [plan, setPlan] = useState(savedPlan);
+  const [plan, setPlan] = useState(isDashboardModify || isDashboardNewJourney ? null : savedPlan);
   const [resultStep, setResultStep] = useState(0);
-  const [planView, setPlanView] = useState(savedPlan ? "summary" : "result");
+  const [planView, setPlanView] = useState(
+    savedPlan && !isDashboardModify && !isDashboardNewJourney ? "summary" : "result"
+  );
   const [message, setMessage] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [isCheckingSavedPlan, setIsCheckingSavedPlan] = useState(Boolean(userId && !savedPlan));
+  const [isCheckingSavedPlan, setIsCheckingSavedPlan] = useState(Boolean(userId && !savedPlan && !planIntent));
   const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false);
+  const [planSaveMode, setPlanSaveMode] = useState(
+    isDashboardNewJourney ? "new" : savedPlan ? "update" : "new"
+  );
 
   useEffect(() => {
-    if (!userId || plan) {
+    if (!userId || plan || planIntent) {
       return;
     }
 
@@ -107,6 +120,7 @@ function Plan() {
 
         localStorage.setItem(getLatestPlanKey({ id: userId }), JSON.stringify(data.plan));
         setPlan(data.plan);
+        setPlanSaveMode("update");
         setHasStarted(true);
         setPlanView("summary");
       } catch {
@@ -164,6 +178,8 @@ function Plan() {
     setCurrentStep(0);
     setHasStarted(true);
     setIsAccountMenuOpen(false);
+    // A user choosing Create New Plan from an existing plan starts a fresh journey.
+    setPlanSaveMode("new");
   }
 
   function goNext() {
@@ -218,13 +234,22 @@ function Plan() {
         return;
       }
 
-      setPlan(data.plan);
-      localStorage.setItem(getLatestPlanKey(user), JSON.stringify(data.plan));
-      await saveGeneratedPlan(user, requestBody, data.plan);
+      // New users and "Create New Plan" use mode "new"; edits to the current plan use "update".
+      const saveMode = planSaveMode;
+      const savedPlan = await saveGeneratedPlan(user, saveMode, requestBody, data.plan);
+
+      if (saveMode === "new") {
+        saveJourneyArchiveSnapshot(user, getStoredLatestPlan(user));
+        resetActiveJourneyTracking(user);
+      }
+
+      setPlan(savedPlan);
+      localStorage.setItem(getLatestPlanKey(user), JSON.stringify(savedPlan));
+      setPlanSaveMode("update");
       setPlanView("result");
       setMessage(data.message || "Plan generated successfully");
-    } catch {
-      setMessage("Could not connect to the server.");
+    } catch (error) {
+      setMessage(error.message || "Could not connect to the server.");
     } finally {
       setIsLoading(false);
     }
@@ -317,6 +342,8 @@ function Plan() {
               setPlanView("result");
               setCurrentStep(totalSteps - 1);
               setHasStarted(true);
+              // Returning to review edits the just-saved current journey instead of starting another one.
+              setPlanSaveMode("update");
             }}
             onBackResult={() => setResultStep(Math.max(resultStep - 1, 0))}
             onNext={() => setResultStep(resultStep + 1)}
@@ -326,6 +353,8 @@ function Plan() {
               setPlanView("result");
               setCurrentStep(0);
               setHasStarted(false);
+              // Restarting after a result creates a fresh journey when the next plan is saved.
+              setPlanSaveMode("new");
             }}
           />
         )}
@@ -363,7 +392,6 @@ function PlanSummary({ plan, onCreateNewPlan }) {
             tracking and logging.
           </p>
         </div>
-        <CompanionMascot size="small" caption="Plan companion" />
       </div>
 
       {plan.warning && <div className="warning-note">Heads up: {plan.warning}</div>}
@@ -965,26 +993,39 @@ function ResultStat({ label, value }) {
   );
 }
 
-async function saveGeneratedPlan(user, inputData, planResult) {
+async function saveGeneratedPlan(user, mode, inputData, planResult) {
   if (!user?.id) {
-    return;
+    throw new Error("You must be logged in before saving a plan.");
   }
 
-  try {
-    await fetch("/api/plans/save", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        user_id: user.id,
-        input_data: inputData,
-        plan_result: planResult,
-      }),
-    });
-  } catch {
-    // The localStorage save above keeps plan generation usable if saving fails.
+  const response = await fetch("/api/plans/save", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      user_id: user.id,
+      mode,
+      input_data: inputData,
+      plan_result: planResult,
+    }),
+  });
+
+  const data = await response.json().catch(() => ({
+    success: false,
+    message: `Save plan API returned status ${response.status}.`,
+  }));
+
+  if (!response.ok || data.success === false) {
+    throw new Error(data.message || "Could not save your plan.");
   }
+
+  return {
+    ...inputData,
+    ...planResult,
+    journey_id: data.journey_id,
+    plan_id: data.plan_id,
+  };
 }
 
 function isStepComplete(step, formData) {
@@ -1070,6 +1111,135 @@ function getStoredLatestPlan(user) {
   } catch {
     return null;
   }
+}
+
+function saveJourneyArchiveSnapshot(user, plan) {
+  if (!user?.id || !plan?.journey_id) {
+    return;
+  }
+
+  const snapshot = {
+    plan,
+    weights: getStoredWeightEntries(user),
+    foods: getStoredEntriesByPrefix(`cutsmart_food_log_${user.id}_`).map(normalizeFoodEntry),
+    exercises: getStoredEntriesByPrefix(`cutsmart_exercise_log_${user.id}_`).map(normalizeExerciseEntry),
+    saved_at: new Date().toISOString(),
+  };
+
+  localStorage.setItem(
+    `cutsmart_journey_snapshot_${user.id}_${plan.journey_id}`,
+    JSON.stringify(snapshot)
+  );
+}
+
+function getStoredWeightEntries(user) {
+  if (!user?.id) {
+    return [];
+  }
+
+  return getStoredEntries(`cutsmart_weight_entries_${user.id}`);
+}
+
+function getStoredEntries(storageKey) {
+  if (!storageKey) {
+    return [];
+  }
+
+  const rawEntries = localStorage.getItem(storageKey);
+
+  if (!rawEntries) {
+    return [];
+  }
+
+  try {
+    return JSON.parse(rawEntries);
+  } catch {
+    return [];
+  }
+}
+
+function getStoredEntriesByPrefix(prefix) {
+  const entries = [];
+
+  for (let index = 0; index < localStorage.length; index += 1) {
+    const key = localStorage.key(index);
+
+    if (!key?.startsWith(prefix)) {
+      continue;
+    }
+
+    const loggedDate = key.slice(prefix.length);
+    const savedEntries = getStoredEntries(key);
+
+    savedEntries.forEach((entry) => {
+      entries.push({ ...entry, logged_date: entry.logged_date || loggedDate });
+    });
+  }
+
+  return entries;
+}
+
+function normalizeFoodEntry(entry) {
+  return {
+    ...entry,
+    food_name: entry.food_name || entry.mealName,
+    calories: Number(entry.calories || 0),
+    logged_date: entry.logged_date || entry.createdAt?.slice(0, 10),
+  };
+}
+
+function normalizeExerciseEntry(entry) {
+  return {
+    ...entry,
+    exercise_name: entry.exercise_name || entry.exerciseName,
+    calories_burned: Number(entry.calories_burned ?? entry.caloriesBurned ?? 0),
+    duration_minutes: Number(entry.duration_minutes ?? entry.duration ?? 0),
+    category: entry.category || "other",
+    logged_date: entry.logged_date || entry.createdAt?.slice(0, 10),
+  };
+}
+
+function resetActiveJourneyTracking(user) {
+  if (!user?.id) {
+    return;
+  }
+
+  localStorage.removeItem(`cutsmart_weight_entries_${user.id}`);
+  removeStoredEntriesByPrefix(`cutsmart_food_log_${user.id}_`);
+  removeStoredEntriesByPrefix(`cutsmart_exercise_log_${user.id}_`);
+  removeStoredEntriesByPrefix(`cutsmart_calendar_${user.id}_`);
+  removeStoredEntriesByPrefix(`cutsmart_streak_${user.id}`);
+}
+
+function removeStoredEntriesByPrefix(prefix) {
+  const keysToRemove = [];
+
+  for (let index = 0; index < localStorage.length; index += 1) {
+    const key = localStorage.key(index);
+
+    if (key?.startsWith(prefix)) {
+      keysToRemove.push(key);
+    }
+  }
+
+  keysToRemove.forEach((key) => localStorage.removeItem(key));
+}
+
+function getFormDataFromPlan(plan) {
+  if (!plan) {
+    return startingForm;
+  }
+
+  return {
+    age: plan.age ?? startingForm.age,
+    gender: plan.gender || startingForm.gender,
+    height_cm: plan.height_cm ?? startingForm.height_cm,
+    current_weight_kg: plan.current_weight_kg ?? startingForm.current_weight_kg,
+    target_weight_kg: plan.target_weight_kg ?? startingForm.target_weight_kg,
+    daily_activity_level: plan.daily_activity_level || startingForm.daily_activity_level,
+    strategy: plan.strategy || startingForm.strategy,
+    desired_timeline_weeks: plan.desired_timeline_weeks ?? "",
+  };
 }
 
 export default Plan;

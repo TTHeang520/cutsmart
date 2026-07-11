@@ -154,19 +154,24 @@ def init_db():
         journey_id INTEGER NOT NULL,
         weight_kg REAL NOT NULL,
         logged_date TEXT NOT NULL,
+        is_initial INTEGER NOT NULL DEFAULT 0,
         created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
         updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (user_id) REFERENCES users (id),
-        FOREIGN KEY (journey_id) REFERENCES plan_journeys (id),
-        UNIQUE (user_id, journey_id, logged_date)
+        FOREIGN KEY (journey_id) REFERENCES plan_journeys (id)
     )
     """)
 
     weight_columns = {
         row[1] for row in cursor.execute("PRAGMA table_info(weight_logs)").fetchall()
     }
+    weight_indexes = cursor.execute("PRAGMA index_list(weight_logs)").fetchall()
+    has_old_weight_unique_constraint = any(
+        row[2] == 1 and len(row) > 3 and row[3] == "u"
+        for row in weight_indexes
+    )
 
-    if "journey_id" not in weight_columns:
+    if "journey_id" not in weight_columns or "is_initial" not in weight_columns or has_old_weight_unique_constraint:
         cursor.execute("DROP TABLE IF EXISTS weight_logs_migrated")
         cursor.execute("""
             CREATE TABLE weight_logs_migrated (
@@ -175,40 +180,157 @@ def init_db():
                 journey_id INTEGER NOT NULL,
                 weight_kg REAL NOT NULL,
                 logged_date TEXT NOT NULL,
+                is_initial INTEGER NOT NULL DEFAULT 0,
                 created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (user_id) REFERENCES users (id),
-                FOREIGN KEY (journey_id) REFERENCES plan_journeys (id),
-                UNIQUE (user_id, journey_id, logged_date)
+                FOREIGN KEY (journey_id) REFERENCES plan_journeys (id)
             )
         """)
 
-        cursor.execute("""
-            INSERT INTO weight_logs_migrated (
-                id,
-                user_id,
-                journey_id,
-                weight_kg,
-                logged_date,
-                created_at,
-                updated_at
-            )
+        legacy_weight_rows = cursor.execute(
+            "SELECT * FROM weight_logs ORDER BY id ASC"
+        ).fetchall()
+        journey_initial_rows = cursor.execute("""
             SELECT
-                weight_logs.id,
-                weight_logs.user_id,
-                plan_journeys.id,
-                weight_logs.weight_kg,
-                weight_logs.logged_date,
-                weight_logs.created_at,
-                weight_logs.updated_at
-            FROM weight_logs
-            JOIN plan_journeys
-                ON plan_journeys.user_id = weight_logs.user_id
-                AND plan_journeys.status = 'active'
-        """)
+                plan_journeys.id AS journey_id,
+                plan_journeys.user_id AS user_id,
+                plan_journeys.started_at AS started_at,
+                user_plans.current_weight_kg AS current_weight_kg
+            FROM plan_journeys
+            LEFT JOIN user_plans
+                ON user_plans.id = (
+                    SELECT id
+                    FROM user_plans
+                    WHERE user_plans.journey_id = plan_journeys.id
+                    ORDER BY created_at ASC, id ASC
+                    LIMIT 1
+                )
+        """).fetchall()
+        journey_initials = {
+            row["journey_id"]: row
+            for row in journey_initial_rows
+            if row["current_weight_kg"] is not None
+        }
+        inserted_initial_journeys = set()
+
+        for row in legacy_weight_rows:
+            row_keys = row.keys()
+            journey_id = row["journey_id"] if "journey_id" in row_keys else None
+
+            if journey_id is None:
+                active_journey = cursor.execute(
+                    """
+                    SELECT id
+                    FROM plan_journeys
+                    WHERE user_id = ? AND status = 'active'
+                    ORDER BY started_at DESC, id DESC
+                    LIMIT 1
+                    """,
+                    (row["user_id"],)
+                ).fetchone()
+
+                if active_journey is None:
+                    continue
+
+                journey_id = active_journey["id"]
+
+            initial = journey_initials.get(journey_id)
+            start_date = initial["started_at"][:10] if initial else None
+            initial_weight = initial["current_weight_kg"] if initial else None
+            is_initial = (
+                initial is not None
+                and journey_id not in inserted_initial_journeys
+                and row["logged_date"] == start_date
+                and float(row["weight_kg"]) == float(initial_weight)
+            )
+
+            if is_initial:
+                inserted_initial_journeys.add(journey_id)
+
+            cursor.execute(
+                """
+                INSERT INTO weight_logs_migrated (
+                    id,
+                    user_id,
+                    journey_id,
+                    weight_kg,
+                    logged_date,
+                    is_initial,
+                    created_at,
+                    updated_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    row["id"],
+                    row["user_id"],
+                    journey_id,
+                    row["weight_kg"],
+                    row["logged_date"],
+                    1 if is_initial else 0,
+                    row["created_at"],
+                    row["updated_at"]
+                )
+            )
+
+        for journey_id, initial in journey_initials.items():
+            if journey_id in inserted_initial_journeys:
+                continue
+
+            cursor.execute(
+                """
+                INSERT INTO weight_logs_migrated (
+                    user_id,
+                    journey_id,
+                    weight_kg,
+                    logged_date,
+                    is_initial,
+                    created_at,
+                    updated_at
+                )
+                VALUES (?, ?, ?, ?, 1, ?, ?)
+                """,
+                (
+                    initial["user_id"],
+                    journey_id,
+                    initial["current_weight_kg"],
+                    initial["started_at"][:10],
+                    initial["started_at"],
+                    initial["started_at"]
+                )
+            )
 
         cursor.execute("DROP TABLE weight_logs")
         cursor.execute("ALTER TABLE weight_logs_migrated RENAME TO weight_logs")
+
+    cursor.execute("""
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_weight_logs_initial_unique
+        ON weight_logs (user_id, journey_id)
+        WHERE is_initial = 1
+    """)
+
+    cursor.execute("""
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_weight_logs_regular_date_unique
+        ON weight_logs (user_id, journey_id, logged_date)
+        WHERE is_initial = 0
+    """)
+
+    cursor.execute("""
+        UPDATE plan_journeys
+        SET initial_weight_kg = (
+            SELECT user_plans.current_weight_kg
+            FROM user_plans
+            WHERE user_plans.journey_id = plan_journeys.id
+            ORDER BY created_at ASC, id ASC
+            LIMIT 1
+        )
+        WHERE EXISTS (
+            SELECT 1
+            FROM user_plans
+            WHERE user_plans.journey_id = plan_journeys.id
+        )
+    """)
 
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS food_logs(
@@ -444,9 +566,10 @@ def start_new_journey(user_id, initial_weight_kg, target_weight_kg, input_data, 
                 user_id,
                 journey_id,
                 weight_kg,
-                logged_date
+                logged_date,
+                is_initial
             )
-            VALUES (?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, 1)
             """,
             (
                 user_id,
@@ -667,10 +790,11 @@ def save_weight_log(user_id, journey_id, weight_kg, logged_date):
             user_id,
             journey_id,
             weight_kg,
-            logged_date
+            logged_date,
+            is_initial
         )
-        VALUES (?, ?, ?, ?)
-        ON CONFLICT(user_id, journey_id, logged_date)
+        VALUES (?, ?, ?, ?, 0)
+        ON CONFLICT(user_id, journey_id, logged_date) WHERE is_initial = 0
         DO UPDATE SET
             weight_kg = excluded.weight_kg,
             updated_at = CURRENT_TIMESTAMP
@@ -690,7 +814,7 @@ def get_weight_history(user_id, journey_id):
         Select *
         FROM weight_logs
         WHERE user_id = ? AND journey_id = ?
-        ORDER BY logged_date DESC
+        ORDER BY logged_date DESC, is_initial ASC, id DESC
         """,
         (user_id, journey_id)
     )
@@ -709,7 +833,7 @@ def get_latest_weight(user_id, journey_id):
         Select *
         FROM weight_logs
         WHERE user_id = ? AND journey_id = ?
-        ORDER BY logged_date DESC, id DESC
+        ORDER BY logged_date DESC, is_initial ASC, id DESC
         LIMIT 1
         """,
         (user_id, journey_id)
@@ -729,6 +853,8 @@ def get_weight_by_date(user_id, journey_id, logged_date):
         SELECT *
         FROM weight_logs
         WHERE user_id = ? AND journey_id = ? AND logged_date = ?
+        ORDER BY is_initial ASC, id DESC
+        LIMIT 1
         """,
         (user_id, journey_id, logged_date)
     )

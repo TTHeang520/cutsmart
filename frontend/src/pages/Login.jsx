@@ -2,12 +2,14 @@ import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import "./Login.css";
 
+
 function Login() {
   const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [message, setMessage] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   async function handleSubmit(event) {
     event.preventDefault();
@@ -15,7 +17,7 @@ function Login() {
     setIsLoading(true);
 
     try {
-      const response = await fetch("/api/login", {
+      const response = await fetch("http://127.0.0.1:5000/api/login", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -30,7 +32,7 @@ function Login() {
         return;
       }
 
-      const user = data.user || data;
+      const user = data.user;
       const username = user.username || email.split("@")[0];
 
       localStorage.setItem(
@@ -42,18 +44,7 @@ function Login() {
         })
       );
 
-      const latestPlan = await getLatestPlanForUser({ ...user, username, email: user.email || email });
-
-      if (latestPlan) {
-        localStorage.setItem(
-          getLatestPlanKey(user),
-          JSON.stringify(latestPlan)
-        );
-        navigate("/dashboard");
-        return;
-      }
-
-      navigate("/welcome");
+      navigate("/dashboard");
     } catch {
       setMessage("Could not connect to the server.");
     } finally {
@@ -62,119 +53,80 @@ function Login() {
   }
 
   return (
-    <main className="login-page">
-      <section className="login-brand-panel" aria-label="CutSmart overview">
-        <div className="login-brand-content">
-          <div className="login-logo-mark" aria-hidden="true">
-            CS
-          </div>
-          <div>
-            <p className="login-kicker">CutSmart</p>
-            <h1>Build healthier habits every day.</h1>
-          </div>
-
-          <div className="login-feature-list">
-            <div className="login-feature-item">
-              <span aria-hidden="true">01</span>
-              <strong>Smart calorie planning</strong>
-            </div>
-            <div className="login-feature-item">
-              <span aria-hidden="true">02</span>
-              <strong>Workout tracking</strong>
-            </div>
-            <div className="login-feature-item">
-              <span aria-hidden="true">03</span>
-              <strong>Progress insights</strong>
-            </div>
+    <main className="auth-page">
+      <section className="auth-mobile-shell" aria-label="Login form">
+        <div className="auth-topbar">
+          <div className="auth-brand-badge" aria-hidden="true">CS</div>
+          <div className="auth-top-pill" aria-hidden="true">
+            <span>▦</span>
+            <strong>CutSmart</strong>
           </div>
         </div>
 
-        <p className="login-copyright">© 2026 CutSmart. All rights reserved.</p>
-      </section>
-
-      <section className="login-card-panel" aria-label="Login form">
-        <div className="login-card">
-          <div className="login-card-header">
-            <p className="login-card-eyebrow">Welcome Back</p>
-            <h2>Login</h2>
-            <p>Continue your fitness journey with CutSmart.</p>
+        <div className="auth-hero">
+          <div className="auth-hero-copy">
+            <p>WELCOME BACK</p>
+            <h1>
+              Welcome
+              <span>Back!</span>
+            </h1>
+            <em>Continue your fitness journey with CutSmart.</em>
           </div>
+        </div>
 
-          <form onSubmit={handleSubmit} className="login-form">
-            <label>
-              Email
-              <input
-                type="email"
-                value={email}
-                onChange={(event) => setEmail(event.target.value)}
-                placeholder="you@example.com"
-                required
-              />
+        <div className="auth-card">
+          <form onSubmit={handleSubmit} className="auth-form">
+            <label className="auth-field">
+              <span className="auth-field-label">Email</span>
+              <span className="auth-input-shell">
+                <span className="auth-input-icon" aria-hidden="true">✉</span>
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(event) => setEmail(event.target.value)}
+                  placeholder="Email address"
+                  required
+                />
+              </span>
             </label>
 
-            <label>
-              Password
-              <input
-                type="password"
-                value={password}
-                onChange={(event) => setPassword(event.target.value)}
-                placeholder="Enter your password"
-                required
-              />
+            <label className="auth-field">
+              <span className="auth-field-label">Password</span>
+              <span className="auth-input-shell">
+                <span className="auth-input-icon" aria-hidden="true">⌘</span>
+                <input
+                  type={showPassword ? "text" : "password"}
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
+                  placeholder="Password"
+                  required
+                />
+               <button
+                type="button"
+                className="auth-password-toggle"
+                onClick={() => setShowPassword(!showPassword)}
+              >
+                {showPassword ? "◌" : "◎"}
+              </button>
+              </span>
             </label>
 
-            <div className="login-form-row">
-              <span>Secure sign in</span>
-              <a href="#forgot-password" onClick={(event) => event.preventDefault()}>
-                Forgot password?
-              </a>
-            </div>
+            {message && <p className="auth-message">{message}</p>}
 
-            {message && <p className="login-message">{message}</p>}
-
-            <button type="submit" disabled={isLoading}>
+            <button type="submit" className="auth-primary-button" disabled={isLoading}>
               {isLoading ? "Logging in..." : "Login"}
             </button>
           </form>
 
-          <p className="login-register-link">
-            New to CutSmart? <Link to="/register">Register</Link>
+          <p className="auth-link-row">
+            New to CutSmart? <Link to="/register">Register <span aria-hidden="true">›</span></Link>
           </p>
         </div>
+
+        <p className="auth-security-note">Your data stays private and secure with CutSmart.</p>
       </section>
     </main>
   );
-}
-
-async function getLatestPlanForUser(user) {
-  if (user?.id) {
-    try {
-      const response = await fetch(`/api/plans/latest/${user.id}`);
-      const data = await response.json();
-
-      if (response.ok && data.success !== false && data.plan) {
-        return data.plan;
-      }
-    } catch {
-      // Fall back to localStorage below when the latest-plan route is unavailable.
-    }
-  }
-
-  const savedPlan = localStorage.getItem(getLatestPlanKey(user));
-
-  if (!savedPlan) {
-    return null;
-  }
-
-  try {
-    return JSON.parse(savedPlan);
-  } catch {
-    return null;
-  }
-}
-
-function getLatestPlanKey(user) {
-  return user?.id ? `cutsmart_latest_plan_${user.id}` : "cutsmart_latest_plan_guest";
 }
 
 export default Login;

@@ -4,7 +4,7 @@ from datetime import date, time
 
 from flask import Flask, request, send_from_directory
 from flask_cors import CORS
-from database import init_db, create_user, get_user_from_email, get_active_journey, start_new_journey, update_journey_initial_weight, save_user_plan, get_latest_user_plan, save_weight_log, get_weight_history, get_weight_by_date, get_latest_weight, save_food_log, get_food_history, get_food_logs_by_date, update_food_log, delete_food_log, save_exercise_log, get_exercise_history, get_exercise_logs_by_date, update_exercise_log, delete_exercise_log, get_user_journeys, get_journey_for_user, get_plans_by_journey, get_food_entry, update_food_photo_path
+from database import init_db, create_user, get_user_from_email, get_active_journey, start_new_journey, save_user_plan, get_latest_user_plan, save_weight_log, get_weight_history, get_weight_by_date, get_latest_weight, save_food_log, get_food_history, get_food_logs_by_date, update_food_log, delete_food_log, save_exercise_log, get_exercise_history, get_exercise_logs_by_date, update_exercise_log, delete_exercise_log, get_user_journeys, get_journey_for_user, get_plans_by_journey, get_food_entry, update_food_photo_path
 from planner import generate_plan
 from werkzeug.exceptions import RequestEntityTooLarge
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -512,13 +512,6 @@ def create_weight_log():
 
     try:
         save_weight_log(user_id, journey["id"], weight_kg, logged_date)
-
-        if logged_date == journey["started_at"][:10]:
-            update_journey_initial_weight(
-                journey["id"],
-                user_id,
-                weight_kg
-            )
     except sqlite3.IntegrityError:
         return {
             "success": False,
