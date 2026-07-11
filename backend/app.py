@@ -57,7 +57,7 @@ def detect_image_extension(photo):
 
         image_format = image.format.lower()
         photo.stream.seek(0)
-    except (UnidentifiedImageError, OSError):
+    except (UnidentifiedImageError, OSError, SyntaxError):
         photo.stream.seek(0)
         return None
 
