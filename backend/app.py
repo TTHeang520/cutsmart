@@ -912,7 +912,7 @@ def create_food_log():
         }, 404
 
     try:
-        save_food_log(user_id, journey["id"], data)
+        food_id = save_food_log(user_id, journey["id"], data)
     except sqlite3.IntegrityError:
         return {
             "success": False,
@@ -923,6 +923,7 @@ def create_food_log():
         "success": True,
         "message": "Food recorded successfully",
         "food": {
+            "id": food_id,
             "user_id": user_id,
             "journey_id": journey["id"],
             "food_name": data["food_name"],
@@ -1317,7 +1318,7 @@ def create_exercise_log():
         }, 404
 
     try:
-        save_exercise_log(user_id, journey["id"], data)
+        exercise_id = save_exercise_log(user_id, journey["id"], data)
     except sqlite3.IntegrityError:
         return {
             "success": False,
@@ -1328,6 +1329,7 @@ def create_exercise_log():
         "success": True,
         "message": "Exercise recorded successfully",
         "exercise": {
+            "id": exercise_id,
             "user_id": user_id,
             "journey_id": journey["id"],
             "exercise_name": data["exercise_name"],

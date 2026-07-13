@@ -591,25 +591,6 @@ def start_new_journey(user_id, initial_weight_kg, target_weight_kg, input_data, 
         "plan_id": plan_id
     }
 
-def update_journey_initial_weight(journey_id, user_id, initial_weight_kg):
-    connection = get_db_connection()
-    cursor = connection.cursor()
-
-    cursor.execute(
-        """
-        UPDATE plan_journeys
-        SET initial_weight_kg = ?
-        WHERE id = ? AND user_id = ?
-        """,
-        (initial_weight_kg, journey_id, user_id)
-    )
-
-    updated_rows = cursor.rowcount
-    connection.commit()
-    connection.close()
-
-    return updated_rows
-
 def get_user_journeys(user_id):
     connection = get_db_connection()
     cursor = connection.cursor()
@@ -902,8 +883,12 @@ def save_food_log(user_id, journey_id, food_data):
         )
     )
 
+    food_id = cursor.lastrowid
     connection.commit()
     connection.close()
+
+    return food_id
+
 def get_food_entry(food_id, user_id, journey_id):
     connection = get_db_connection()
     cursor = connection.cursor()
@@ -1085,8 +1070,11 @@ def save_exercise_log(user_id, journey_id, exercise_data):
         )
     )
 
+    exercise_id = cursor.lastrowid
     connection.commit()
     connection.close()
+
+    return exercise_id
 
 def get_exercise_history(user_id, journey_id):
     connection = get_db_connection()
