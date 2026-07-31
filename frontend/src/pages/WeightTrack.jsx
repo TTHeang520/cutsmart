@@ -98,33 +98,33 @@ function WeightTrack() {
             <p>Track your weight trend and stay on course.</p>
           </div>
           <div className="weight-header-actions">
-            <Link to="/dashboard"><span aria-hidden="true">▦</span>Dashboard</Link>
+            <Link to="/dashboard"><span aria-hidden="true">â–¦</span>Dashboard</Link>
           </div>
         </header>
 
         <div className="tracker-summary-grid weight-stat-grid">
           <TrackerMetric
-            icon="▣"
+            icon="â–£"
             label="Average"
             value={weightStats.averageWeight ? `${formatNumber(weightStats.averageWeight)} kg` : "--"}
             detail={getDateRange(weightStats.chartData)}
           />
           <TrackerMetric
-            icon="↓"
+            icon="â†“"
             label="Change"
             value={formatSignedWeight(weightStats.weightChange)}
             detail="vs starting weight"
             tone="purple"
           />
           <TrackerMetric
-            icon="⌁"
+            icon="âŒ"
             label="Lowest"
             value={weightStats.lowestEntry ? `${formatNumber(weightStats.lowestEntry.weight_kg)} kg` : "--"}
             detail={weightStats.lowestEntry?.logged_date || "No data yet"}
             tone="green"
           />
           <TrackerMetric
-            icon="⌁"
+            icon="âŒ"
             label="Highest"
             value={weightStats.highestEntry ? `${formatNumber(weightStats.highestEntry.weight_kg)} kg` : "--"}
             detail={weightStats.highestEntry?.logged_date || "No data yet"}
@@ -189,7 +189,7 @@ function WeightTrack() {
               <input
                 type="number"
                 min="1"
-                step="0.1"
+                step="0.01"
                 value={weight}
                 onChange={(event) => setWeight(event.target.value)}
                 placeholder="77.9"

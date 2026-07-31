@@ -1,4 +1,4 @@
-:root {
+﻿:root {
   --ink: #172033;
   --muted: #667085;
   --line: #dbe4ee;
@@ -5580,7 +5580,7 @@ button:disabled {
 }
 
 .streak-dot-row .active::before {
-  content: "🔥";
+  content: "ðŸ”¥";
   width: 24px;
   height: 24px;
   color: #fb923c;
@@ -5948,7 +5948,7 @@ button:disabled {
 
 .app-log-entry {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
   align-items: center;
   gap: 16px;
   padding: 14px;
@@ -5957,11 +5957,20 @@ button:disabled {
   background: rgba(255, 255, 255, 0.045);
 }
 
-.app-log-entry-icon {
+.app-log-entry-icon,
+.app-log-entry-photo {
   width: 58px;
   height: 58px;
-  font-size: 28px;
+  border-radius: 18px;
+  object-fit: cover;
+  font-size: 14px;
   background: rgba(255, 255, 255, 0.08);
+}
+
+.app-log-entry-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .app-log-entry strong {
@@ -5978,14 +5987,30 @@ button:disabled {
   font-weight: 800;
 }
 
-.app-log-entry > span:last-child {
+.app-log-entry > span:nth-last-child(2) {
   color: #b56cff;
   font-size: 15px;
   font-weight: 950;
 }
 
-.food-log-page .app-log-entry > span:last-child {
+.food-log-page .app-log-entry > span:nth-last-child(2) {
   color: #73f56b;
+}
+
+.app-log-entry button {
+  min-height: 36px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 12px;
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.1);
+  font-size: 12px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.app-log-entry button:hover {
+  background: rgba(255, 255, 255, 0.18);
 }
 
 .app-log-empty {

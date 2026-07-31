@@ -1,14 +1,60 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, Navigate } from "react-router-dom";
+
+const API_BASE_URL = "http://127.0.0.1:5000";
+const EMPTY_ENTRIES = {
+  food: [],
+  exercise: [],
+  weight: [],
+};
 
 function Calendar() {
   const savedUser = localStorage.getItem("user");
   const user = savedUser ? JSON.parse(savedUser) : null;
+  const userId = user?.id;
   const today = getToday();
   const [visibleDate, setVisibleDate] = useState(() => new Date());
   const [selectedDate, setSelectedDate] = useState(today);
+  const [entries, setEntries] = useState(EMPTY_ENTRIES);
+  const [isLoadingEntries, setIsLoadingEntries] = useState(false);
+  const [error, setError] = useState("");
   const days = useMemo(() => buildMonthDays(visibleDate), [visibleDate]);
-  const entries = user ? getEntriesForDate(user.id, selectedDate) : null;
+
+  useEffect(() => {
+    if (!userId) {
+      return;
+    }
+
+    let isCurrent = true;
+
+    async function loadEntriesForDate() {
+      setIsLoadingEntries(true);
+      setError("");
+
+      try {
+        const nextEntries = await fetchEntriesForDate(userId, selectedDate);
+
+        if (isCurrent) {
+          setEntries(nextEntries);
+        }
+      } catch (requestError) {
+        if (isCurrent) {
+          setEntries(EMPTY_ENTRIES);
+          setError(requestError.message || "Could not load calendar entries.");
+        }
+      } finally {
+        if (isCurrent) {
+          setIsLoadingEntries(false);
+        }
+      }
+    }
+
+    loadEntriesForDate();
+
+    return () => {
+      isCurrent = false;
+    };
+  }, [userId, selectedDate]);
 
   if (!user) {
     return <Navigate to="/login" replace />;
@@ -66,9 +112,17 @@ function Calendar() {
             <span className="daily-dashboard-eyebrow">Selected date</span>
             <h2>{selectedDate}</h2>
           </div>
-          <CalendarEntries title="Food" entries={entries.food} emptyText="No meals logged." />
-          <CalendarEntries title="Exercise" entries={entries.exercise} emptyText="No workouts logged." />
-          <CalendarEntries title="Weight" entries={entries.weight} emptyText="No weight logged." />
+
+          {isLoadingEntries && <p>Loading entries...</p>}
+          {error && <p>{error}</p>}
+
+          {!isLoadingEntries && !error && (
+            <>
+              <CalendarEntries title="Food" entries={entries.food} emptyText="No meals logged." />
+              <CalendarEntries title="Exercise" entries={entries.exercise} emptyText="No workouts logged." />
+              <CalendarEntries title="Weight" entries={entries.weight} emptyText="No weight logged." />
+            </>
+          )}
         </section>
       </section>
     </main>
@@ -83,7 +137,7 @@ function CalendarEntries({ title, entries, emptyText }) {
         <p>{emptyText}</p>
       ) : (
         entries.map((entry, index) => (
-          <div key={`${title}-${index}`}>
+          <div key={`${title}-${entry.id || index}`}>
             <strong>{entry.title}</strong>
             <span>{entry.value}</span>
           </div>
@@ -91,6 +145,55 @@ function CalendarEntries({ title, entries, emptyText }) {
       )}
     </div>
   );
+}
+
+async function fetchEntriesForDate(userId, dateString) {
+  const [foodData, exerciseData, weightData] = await Promise.all([
+    fetchCalendarJson(`${API_BASE_URL}/api/foods/${userId}?date=${dateString}`),
+    fetchCalendarJson(`${API_BASE_URL}/api/exercises/${userId}?date=${dateString}`),
+    fetchCalendarJson(`${API_BASE_URL}/api/weights/${userId}?date=${dateString}`),
+  ]);
+
+  return {
+    food: Array.isArray(foodData?.foods)
+      ? foodData.foods.map((entry) => ({
+          id: entry.id,
+          title: entry.food_name,
+          value: `${formatNumber(entry.calories)} kcal${entry.meal_type ? ` - ${entry.meal_type}` : ""}`,
+        }))
+      : [],
+    exercise: Array.isArray(exerciseData?.exercises)
+      ? exerciseData.exercises.map((entry) => ({
+          id: entry.id,
+          title: entry.exercise_name,
+          value: `${formatNumber(entry.calories_burned)} kcal - ${formatNumber(entry.duration_minutes)} min`,
+        }))
+      : [],
+    weight: weightData?.weight
+      ? [
+          {
+            id: weightData.weight.id,
+            title: "Weight",
+            value: `${formatNumber(weightData.weight.weight_kg)} kg`,
+          },
+        ]
+      : [],
+  };
+}
+
+async function fetchCalendarJson(url) {
+  const response = await fetch(url);
+  const data = await response.json().catch(() => null);
+
+  if (response.status === 404) {
+    return null;
+  }
+
+  if (!response.ok) {
+    throw new Error(data?.message || `Calendar API returned status ${response.status}.`);
+  }
+
+  return data;
 }
 
 function buildMonthDays(date) {
@@ -111,39 +214,6 @@ function buildMonthDays(date) {
       isCurrentMonth: current.getMonth() === month,
     };
   });
-}
-
-function getEntriesForDate(userId, dateString) {
-  const food = getJson(`cutsmart_food_log_${userId}_${dateString}`).map((entry) => ({
-    title: entry.mealName,
-    value: `${formatNumber(entry.calories)} kcal`,
-  }));
-  const exercise = getJson(`cutsmart_exercise_log_${userId}_${dateString}`).map((entry) => ({
-    title: entry.exerciseName,
-    value: `${formatNumber(entry.caloriesBurned)} kcal · ${formatNumber(entry.duration)} min`,
-  }));
-  const weight = getJson(`cutsmart_weight_entries_${userId}`)
-    .filter((entry) => entry.logged_date === dateString)
-    .map((entry) => ({
-      title: "Weight",
-      value: `${formatNumber(entry.weight_kg)} kg`,
-    }));
-
-  return { food, exercise, weight };
-}
-
-function getJson(key) {
-  const raw = localStorage.getItem(key);
-
-  if (!raw) {
-    return [];
-  }
-
-  try {
-    return JSON.parse(raw);
-  } catch {
-    return [];
-  }
 }
 
 function getToday() {

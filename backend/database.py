@@ -260,7 +260,7 @@ def init_db():
                     created_at,
                     updated_at
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     row["id"],
@@ -385,6 +385,7 @@ def init_db():
         user_id INTEGER NOT NULL,
         journey_id INTEGER NOT NULL,
         exercise_name TEXT NOT NULL,
+        category TEXT,
         duration_minutes REAL NOT NULL,
         calories_burned REAL NOT NULL,
         logged_date TEXT NOT NULL,
@@ -400,6 +401,14 @@ def init_db():
     exercise_columns = {
         row[1] for row in cursor.execute("PRAGMA table_info(exercise_logs)").fetchall()
     }
+
+    if "category" not in exercise_columns:
+        cursor.execute(
+            """
+            ALTER TABLE exercise_logs
+            ADD COLUMN category TEXT
+            """
+        )
 
     if "journey_id" not in exercise_columns:
         cursor.execute(
@@ -1050,18 +1059,20 @@ def save_exercise_log(user_id, journey_id, exercise_data):
             user_id,
             journey_id,
             exercise_name,
+            category,
             duration_minutes,
             calories_burned,
             logged_date,
             logged_time,
             notes
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             user_id,
             journey_id,
             exercise_data["exercise_name"],
+            exercise_data.get("category"),
             exercise_data["duration_minutes"],
             exercise_data["calories_burned"],
             exercise_data["logged_date"],
@@ -1123,6 +1134,7 @@ def update_exercise_log(exercise_id, user_id, journey_id, exercise_data):
         UPDATE exercise_logs
         SET
             exercise_name = ?,
+            category = ?,
             duration_minutes = ?,
             calories_burned = ?,
             logged_date = ?,
@@ -1133,6 +1145,7 @@ def update_exercise_log(exercise_id, user_id, journey_id, exercise_data):
         """,
         (
             exercise_data["exercise_name"],
+            exercise_data.get("category"),
             exercise_data["duration_minutes"],
             exercise_data["calories_burned"],
             exercise_data["logged_date"],

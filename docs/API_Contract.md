@@ -806,6 +806,7 @@ Success response:
       "user_id": 1,
       "journey_id": 2,
       "exercise_name": "Running",
+      "category": "cardio",
       "duration_minutes": 30,
       "calories_burned": 300,
       "logged_date": "2026-07-02",
@@ -1262,8 +1263,8 @@ The food entry must belong to the user and the user's active journey.
 This request must use `multipart/form-data`, not JSON. It must contain:
 
 ```text
-user_id → text form field
-photo   → uploaded image file
+user_id â†’ text form field
+photo   â†’ uploaded image file
 ```
 
 Example frontend request:
@@ -1661,7 +1662,7 @@ Exercise create, history, date, update, and delete routes operate on the active 
 
 Required fields are `user_id`, `exercise_name`, `duration_minutes`, `calories_burned`, `logged_date`, `logged_time`.
 
-Optional fields are `notes`.
+Optional fields are `category` and `notes`.
 
 ## Create Exercise Entry
 
@@ -1677,6 +1678,7 @@ POST /api/exercises
 {
   "user_id": 1,
   "exercise_name": "Running",
+  "category": "cardio",
   "duration_minutes": 30,
   "calories_burned": 300,
   "logged_date": "2026-07-02",
@@ -1691,12 +1693,15 @@ POST /api/exercises
 
 `logged_time` must use zero-padded 24-hour `HH:MM` format.
 
+`category` is optional. Suggested values are `cardio`, `strength`, `cycling`, `flexibility`, `sports`, `recovery`, or `other`.
+
 `notes` is optional. If omitted, it returns `null`.
 
 ```json
 {
   "user_id": 1,
   "exercise_name": "Running",
+  "category": "cardio",
   "duration_minutes": 30,
   "calories_burned": 300,
   "logged_date": "2026-07-02",
@@ -1714,6 +1719,7 @@ POST /api/exercises
       "user_id": 1,
       "journey_id": 3,
       "exercise_name": "Running",
+      "category": "cardio",
       "duration_minutes": 30,
       "calories_burned": 300,
       "logged_date": "2026-07-02",
@@ -1824,6 +1830,7 @@ This route returns all exercise entries for one user, ordered by newest date and
       "id": 3,
       "user_id": 1,
       "exercise_name": "Running",
+      "category": "cardio",
       "duration_minutes": 30.0,
       "calories_burned": 300.0,
       "logged_date": "2026-07-02",
@@ -1876,6 +1883,7 @@ Exercise entries are ordered by `logged_time` from earliest to latest. The respo
       "id": 3,
       "user_id": 1,
       "exercise_name": "Running",
+      "category": "cardio",
       "duration_minutes": 30.0,
       "calories_burned": 300.0,
       "logged_date": "2026-07-02",
@@ -1951,6 +1959,7 @@ The request must contain the full edited exercise entry. Both `exercise_id` and 
 {
   "user_id": 1,
   "exercise_name": "Cycling",
+  "category": "cycling",
   "duration_minutes": 40,
   "calories_burned": 240,
   "logged_date": "2026-07-02",
@@ -1971,6 +1980,7 @@ The update route applies the same required-field, number, date, and time validat
     "id": 3,
     "user_id": 1,
     "exercise_name": "Cycling",
+    "category": "cycling",
     "duration_minutes": 40.0,
     "calories_burned": 240.0,
     "logged_date": "2026-07-02",
