@@ -137,7 +137,7 @@ function Plan() {
     return () => {
       isCurrent = false;
     };
-  }, [userId, plan]);
+  }, [userId, plan, planIntent]);
 
   function handleChange(event) {
     const { name, value } = event.target;

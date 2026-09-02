@@ -10,7 +10,8 @@ function JourneyOverview() {
   const { journeyId } = useParams();
   const savedUser = localStorage.getItem("user");
   const user = savedUser ? JSON.parse(savedUser) : null;
-  const localWeightStorageKey = user ? `cutsmart_weight_entries_${user.id}` : "";
+  const userId = user?.id;
+  const localWeightStorageKey = userId ? `cutsmart_weight_entries_${userId}` : "";
   const [overview, setOverview] = useState({
     plans: [],
     weights: [],
@@ -18,11 +19,11 @@ function JourneyOverview() {
     exercises: [],
     journey: null,
   });
-  const [isLoading, setIsLoading] = useState(Boolean(user?.id));
+  const [isLoading, setIsLoading] = useState(Boolean(userId));
   const [error, setError] = useState("");
 
   useEffect(() => {
-    if (!user?.id || !journeyId) {
+    if (!userId || !journeyId) {
       return;
     }
 
@@ -34,10 +35,10 @@ function JourneyOverview() {
 
       try {
         const [plansData, weightsData, foodsData, exercisesData] = await Promise.all([
-          fetchJourneyData(user.id, journeyId, "plans"),
-          fetchOptionalJourneyData(user.id, journeyId, "weights"),
-          fetchOptionalJourneyData(user.id, journeyId, "foods"),
-          fetchOptionalJourneyData(user.id, journeyId, "exercises"),
+          fetchJourneyData(userId, journeyId, "plans"),
+          fetchOptionalJourneyData(userId, journeyId, "weights"),
+          fetchOptionalJourneyData(userId, journeyId, "foods"),
+          fetchOptionalJourneyData(userId, journeyId, "exercises"),
         ]);
 
         if (!isCurrent) {
@@ -67,7 +68,7 @@ function JourneyOverview() {
     return () => {
       isCurrent = false;
     };
-  }, [journeyId, user?.id]);
+  }, [journeyId, userId]);
 
   const sortedWeights = useMemo(
     () => [...overview.weights].sort((a, b) => a.logged_date.localeCompare(b.logged_date)),
@@ -78,8 +79,8 @@ function JourneyOverview() {
     [localWeightStorageKey]
   );
   const journeySnapshot = useMemo(
-    () => getStoredJourneySnapshot(user, journeyId),
-    [journeyId, user?.id]
+    () => getStoredJourneySnapshot(userId, journeyId),
+    [journeyId, userId]
   );
   const snapshotWeights = useMemo(
     () => [...(journeySnapshot?.weights || [])].sort((a, b) => a.logged_date.localeCompare(b.logged_date)),
@@ -369,12 +370,12 @@ function getStoredWeightEntries(storageKey) {
   }
 }
 
-function getStoredJourneySnapshot(user, journeyId) {
-  if (!user?.id || !journeyId) {
+function getStoredJourneySnapshot(userId, journeyId) {
+  if (!userId || !journeyId) {
     return null;
   }
 
-  const rawSnapshot = localStorage.getItem(`cutsmart_journey_snapshot_${user.id}_${journeyId}`);
+  const rawSnapshot = localStorage.getItem(`cutsmart_journey_snapshot_${userId}_${journeyId}`);
 
   if (!rawSnapshot) {
     return null;
