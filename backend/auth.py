@@ -20,6 +20,14 @@ def init_auth(app):
             expires_at INTEGER NOT NULL
         )""")
     connection.close()
+    connection = get_db_connection()
+    try:
+        connection.execute("""CREATE TABLE IF NOT EXISTS auth_limits (
+            key TEXT PRIMARY KEY, attempts INTEGER NOT NULL, expires_at INTEGER NOT NULL
+        )""")
+        connection.commit()
+    finally:
+        connection.close()
 
     if app.extensions.get("cutsmart_auth"):
         return
@@ -29,6 +37,11 @@ def init_auth(app):
     def authorize():
         if request.method == "OPTIONS" or not request.path.startswith("/api/"):
             return None
+        if request.endpoint in ("login", "register") and request.method == "POST":
+            retry = consume_auth_attempt(request.endpoint, request.remote_addr or "unknown")
+            if retry:
+                return ({"success": False, "message": "Too many attempts. Try again later."},
+                        429, {"Retry-After": str(retry)})
         if request.method not in ("GET", "HEAD"):
             # Custom headers cannot be sent by a cross-site HTML form.
             if request.headers.get("X-CutSmart-Request") != "1":
@@ -81,3 +94,21 @@ def issue_session(user_id):
     finally:
         connection.close()
     return token, csrf
+
+
+def consume_auth_attempt(endpoint, address):
+    """Atomically count requests in a 15-minute window shared by server threads."""
+    now = int(time.time())
+    limit = 10 if endpoint == "login" else 5
+    key = endpoint + ":" + hashlib.sha256(address.encode()).hexdigest()
+    connection = get_db_connection()
+    try:
+        connection.execute("BEGIN IMMEDIATE")
+        connection.execute("DELETE FROM auth_limits WHERE expires_at <= ?", (now,))
+        connection.execute("""INSERT INTO auth_limits VALUES (?, 1, ?)
+            ON CONFLICT(key) DO UPDATE SET attempts = attempts + 1""", (key, now + 900))
+        row = connection.execute("SELECT * FROM auth_limits WHERE key = ?", (key,)).fetchone()
+        connection.commit()
+        return max(1, row["expires_at"] - now) if row["attempts"] > limit else 0
+    finally:
+        connection.close()

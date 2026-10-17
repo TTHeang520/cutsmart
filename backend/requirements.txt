@@ -2,3 +2,4 @@ Flask
 Flask-Cors
 Werkzeug
 Pillow
+waitress>=3.0.2,<4

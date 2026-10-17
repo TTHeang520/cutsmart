@@ -7,7 +7,9 @@ plans, archived journeys, weight tracking, food photos, exercise categories,
 and calendar views. This release is for running locally on your own computer.
 Server-verified sessions, ownership checks, private photos and CSRF protection
 are implemented. Public hosting still needs HTTPS, same-origin API routing,
-persistent storage and login rate limiting.
+persistent hosting and deployed-browser verification. IP-based login/register
+rate limits and a Waitress single-origin runner are now implemented; see
+[Deployment](docs/DEPLOYMENT.md) for persistent-disk settings and preview commands.
 
 ### Start the App
 

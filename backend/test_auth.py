@@ -54,6 +54,38 @@ class AuthenticationTest(unittest.TestCase):
         connection.close()
         self.assertEqual(self.client.get("/api/session").status_code, 401)
 
+    def test_login_rate_limit_and_window_expiry(self):
+        from auth import consume_auth_attempt
+        with patch("auth.time.time", return_value=1000):
+            for _ in range(10):
+                self.assertEqual(consume_auth_attempt("login", "test-client"), 0)
+            self.assertEqual(consume_auth_attempt("login", "test-client"), 900)
+            self.assertEqual(consume_auth_attempt("login", "different-client"), 0)
+        with patch("auth.time.time", return_value=1900):
+            self.assertEqual(consume_auth_attempt("login", "test-client"), 0)
+
+    def test_registration_limit_and_forwarded_header_spoof(self):
+        # setUp already used two registration attempts from this address.
+        for _ in range(3):
+            self.client.post("/api/register", json={})
+        response = self.client.post("/api/register", json={}, headers={"X-Forwarded-For": "8.8.8.8"})
+        self.assertEqual(response.status_code, 429)
+        self.assertGreater(int(response.headers["Retry-After"]), 0)
+
+    def test_frontend_routes_do_not_expose_private_files(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            (root / "index.html").write_text("test application", encoding="utf-8")
+            (root / "assets").mkdir()
+            (root / "assets" / "app.js").write_text("test asset", encoding="utf-8")
+            with patch.object(self.api, "FRONTEND_DIR", root):
+                for url in ("/", "/dashboard", "/journeys/1", "/assets/app.js"):
+                    response = self.client.get(url)
+                    self.assertEqual(response.status_code, 200)
+                    response.close()
+                for url in ("/cutsmart_database", "/uploads/test.jpg", "/assets/../../auth.py", "/api/missing"):
+                    self.assertEqual(self.client.get(url).status_code, 404)
+
     def test_private_photo_and_revoked_cookie_replay(self):
         connection = database.get_db_connection()
         connection.execute("INSERT INTO plan_journeys (user_id, initial_weight_kg, target_weight_kg) VALUES (1, 80, 70)")

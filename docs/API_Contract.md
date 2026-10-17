@@ -4,6 +4,10 @@ This document describes the backend API routes that the frontend should call.
 
 ## Authentication (2026-10-18)
 
+Login and registration are rate limited per client IP: 10 login requests and
+5 registration requests per 15 minutes. All attempts count. HTTP 429 returns a
+JSON message and Retry-After seconds. See DEPLOYMENT.md for trusted proxy setup.
+
 All API routes except login, register and the health check require the
 `cutsmart_session` HttpOnly cookie. Login now returns `csrf_token` and sets this
 cookie; sessions expire after eight hours. Every write request requires

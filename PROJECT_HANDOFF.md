@@ -10,6 +10,13 @@ how to run it locally, and what remains before a public launch.
 
 ## 1. Project in One Paragraph
 
+Deployment-preparation update (2026-10-18): backend/config.py selects a persistent
+data directory via CUTSMART_DATA_DIR (required in production). backend/serve.py
+uses Waitress to serve compiled React and the API at one origin. Database-backed
+IP limits allow 10 login and 5 registration requests per 15 minutes. Hosting is
+still unprovisioned; docs/DEPLOYMENT.md is the current deployment guide. Earlier
+roadmap references to implementing these controls are completed by this update.
+
 CutSmart is a weight-management web application. A user registers, enters body
 statistics and a target, receives a calorie-deficit plan, and records weight,
 food, and exercise. The app groups those records into **journeys** so a user can

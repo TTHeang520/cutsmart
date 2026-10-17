@@ -13,11 +13,12 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from pathlib import Path
 from uuid import uuid4
 from PIL import Image, UnidentifiedImageError
+from config import DATA_DIR, FRONTEND_DIR, PRODUCTION
 
 app = Flask(__name__)
 app.config["SESSION_COOKIE_SECURE"] = os.environ.get("CUTSMART_ENV") == "production"
 FOOD_PHOTO_FOLDER = (
-    Path(__file__).resolve().parent
+    DATA_DIR
     / "uploads"
     / "food_photos"
 )
@@ -103,7 +104,24 @@ def logout():
 
 @app.route("/")
 def home():
+    if (FRONTEND_DIR / "index.html").is_file():
+        return send_from_directory(FRONTEND_DIR, "index.html")
     return "Hello CutSmart"
+
+
+@app.get("/<path:path>")
+def frontend_page(path):
+    if path == "api" or path.startswith("api/"):
+        return {"success": False, "message": "API route not found"}, 404
+    # Serve only compiled assets or known React routes, never backend/data files.
+    if path.startswith("assets/") or path in {"favicon.svg", "icons.svg", "plant-stage-1.png"}:
+        return send_from_directory(FRONTEND_DIR, path)
+    routes = {"login", "register", "welcome", "dashboard", "plan", "food-log",
+              "exercise-log", "weight-track", "calendar", "reports", "settings",
+              "journey-history", "profile", "activity-history"}
+    if path in routes or (path.startswith("journeys/") and path[9:].isdigit()):
+        return send_from_directory(FRONTEND_DIR, "index.html")
+    return {"success": False, "message": "Not found"}, 404
 
 
 @app.route("/api/test")
@@ -1622,4 +1640,4 @@ def delete_exercise_entry(exercise_id):
     }
 
 if __name__ == "__main__":
-    app.run(debug=os.environ.get("FLASK_DEBUG") == "1")
+    app.run(debug=not PRODUCTION and os.environ.get("FLASK_DEBUG") == "1")

@@ -1,8 +1,8 @@
 import json
 import sqlite3
-from pathlib import Path
+from config import DATA_DIR
 
-DATABASE_NAME = Path(__file__).resolve().parent / "cutsmart_database"
+DATABASE_NAME = DATA_DIR / "cutsmart_database"
 
 def get_db_connection():
     connection = sqlite3.connect(DATABASE_NAME)
