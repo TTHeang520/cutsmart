@@ -10,6 +10,11 @@ how to run it locally, and what remains before a public launch.
 
 ## 1. Project in One Paragraph
 
+Hosting-package update: Dockerfile and .dockerignore now package the compiled
+frontend with the backend, excluding local data and credentials. See
+docs/HOSTING_SETUP.md. No container build has been run locally (Docker absent),
+and no hosting service has been created. Account connection and budget are pending.
+
 Deployment-preparation update (2026-10-18): backend/config.py selects a persistent
 data directory via CUTSMART_DATA_DIR (required in production). backend/serve.py
 uses Waitress to serve compiled React and the API at one origin. Database-backed
