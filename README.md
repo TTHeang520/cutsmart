@@ -1,5 +1,109 @@
 # CutSmart
 
+## Local Preview Release
+
+CutSmart is a React/Vite + Flask web app with SQLite persistence. It supports
+plans, archived journeys, weight tracking, food photos, exercise categories,
+and calendar views. This release is for running locally on your own computer.
+It is not yet suitable for an internet-facing service: the API currently trusts
+client-supplied user IDs without authenticated sessions.
+
+### Start the App
+
+Install Python 3.12+ and a Node.js version supported by Vite 8 (Node 22.12+ is
+a suitable baseline). Clone this repository, then run from its root in PowerShell:
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r backend/requirements.txt
+.\.venv\Scripts\python.exe backend/app.py
+```
+
+Keep that terminal open. In a second terminal, from the repository root:
+
+```powershell
+cd frontend
+npm.cmd ci
+npm.cmd run dev
+```
+
+Open the URL printed by Vite (normally http://localhost:5173). Both servers must
+keep running. Register an account, generate and save a plan, then log activity.
+The database and upload directories are created automatically. Your data persists
+when you stop the servers; another checkout has its own database.
+
+### Verification and Handoff
+
+```powershell
+.\.venv\Scripts\python.exe -m unittest discover -s backend -p "test_*.py" -v
+cd frontend
+npm.cmd run lint
+npm.cmd run build
+```
+
+See [PROJECT_HANDOFF.md](PROJECT_HANDOFF.md) for architecture and history,
+[API Contract](docs/API_Contract.md) for requests/responses, and
+[release notes](docs/RELEASE_NOTES.md) for scope and remaining launch work.
+
+Back up `backend/cutsmart_database` and `backend/uploads/` privately before
+moving computers. They are intentionally excluded from Git. A GitHub release
+provides source downloads, not a running hosted service.
+
+The original project proposal below describes ideas as well as implemented work;
+use the handoff and release notes to determine current scope.
+
+## Local Preview Release
+
+CutSmart is a React/Vite + Flask web app with SQLite persistence. It supports
+plans, archived journeys, weight tracking, food photos, exercise categories,
+and calendar views. This release is for running locally on your own computer.
+It is not yet suitable for an internet-facing service: the API currently trusts
+client-supplied user IDs without authenticated sessions.
+
+### Start the App
+
+Install Python 3.12+ and a Node.js version supported by Vite 8 (Node 22.12+ is
+a suitable baseline). Clone this repository, then run from its root in PowerShell:
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r backend/requirements.txt
+.\.venv\Scripts\python.exe backend/app.py
+```
+
+Keep that terminal open. In a second terminal, from the repository root:
+
+```powershell
+cd frontend
+npm.cmd ci
+npm.cmd run dev
+```
+
+Open the URL printed by Vite (normally http://localhost:5173). Both servers must
+keep running. Register an account, generate and save a plan, then log activity.
+The database and upload directories are created automatically. Your data persists
+when you stop the servers; another checkout has its own database.
+
+### Verification and Handoff
+
+```powershell
+.\.venv\Scripts\python.exe -m unittest discover -s backend -p "test_*.py" -v
+cd frontend
+npm.cmd run lint
+npm.cmd run build
+```
+
+See [PROJECT_HANDOFF.md](PROJECT_HANDOFF.md) for architecture and history,
+[API Contract](docs/API_Contract.md) for requests/responses, and
+[release notes](docs/RELEASE_NOTES.md) for scope and remaining launch work.
+
+Back up `backend/cutsmart_database` and `backend/uploads/` privately before
+moving computers. They are intentionally excluded from Git. A GitHub release
+provides source downloads, not a running hosted service.
+
+The original project proposal below describes ideas as well as implemented work;
+use the handoff and release notes to determine current scope.
+
 CutSmart is an application that helps users plan weight loss in a smarter and more balanced way.
 
 Most weight loss apps focus mainly on giving fixed workout. CutSmart focuses on the main idea behind weight loss: maintaining a healthy calorie deficit. The app aims to help users understand how diet and exercise work together, then generate a personalized plan based on their body statistics, goals, and lifestyle preferences.
