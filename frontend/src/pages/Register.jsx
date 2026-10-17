@@ -1,3 +1,4 @@
+import { apiFetch } from "../utils/api";
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import "./Login.css";
@@ -20,7 +21,7 @@ function Register() {
     setIsLoading(true);
 
     try {
-      const response = await fetch("http://127.0.0.1:5000/api/register", {
+      const response = await apiFetch("/api/register", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

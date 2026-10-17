@@ -1,3 +1,4 @@
+import { apiFetch } from "../utils/api";
 import { useEffect, useState } from "react";
 import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
 import CompanionMascot from "../components/CompanionMascot";
@@ -111,7 +112,7 @@ function Plan() {
 
     async function fetchLatestPlan() {
       try {
-        const response = await fetch(`/api/plans/latest/${userId}`);
+        const response = await apiFetch(`/api/plans/latest/${userId}`);
         const data = await response.json();
 
         if (!isCurrent || !response.ok || data.success === false || !data.plan) {
@@ -164,7 +165,14 @@ function Plan() {
     }
   }
 
-  function handleLogout() {
+  async function handleLogout() {
+    try {
+      const response = await apiFetch("/api/logout", { method: "POST" });
+      if (!response.ok) throw new Error("Logout failed");
+    } catch {
+      window.alert("Could not log out. Please check your connection and retry.");
+      return;
+    }
     localStorage.removeItem("user");
     navigate("/login");
   }
@@ -216,7 +224,7 @@ function Plan() {
     }
 
     try {
-      const response = await fetch("/api/plan", {
+      const response = await apiFetch("/api/plan", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -998,7 +1006,7 @@ async function saveGeneratedPlan(user, mode, inputData, planResult) {
     throw new Error("You must be logged in before saving a plan.");
   }
 
-  const response = await fetch("/api/plans/save", {
+  const response = await apiFetch("/api/plans/save", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",

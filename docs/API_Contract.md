@@ -2,6 +2,23 @@
 
 This document describes the backend API routes that the frontend should call.
 
+## Authentication (2026-10-18)
+
+All API routes except login, register and the health check require the
+`cutsmart_session` HttpOnly cookie. Login now returns `csrf_token` and sets this
+cookie; sessions expire after eight hours. Every write request requires
+`X-CutSmart-Request: 1`; authenticated writes also require `X-CSRF-Token`.
+Existing user_id fields must match the authenticated account (otherwise 403).
+Missing or expired sessions return 401. Photos require authenticated ownership.
+
+`GET /api/session` returns success, user_id and csrf_token.
+`POST /api/logout` revokes the session and clears its cookie.
+Old curl examples below now require these headers and a cookie jar.
+
+React uses same-origin /api URLs through Vite's proxy. Production must proxy
+/api under the website origin over HTTPS and set CUTSMART_ENV=production for
+Secure cookies. Broad CORS was removed.
+
 ## Base URL
 
 Local backend URL:

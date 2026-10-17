@@ -1,7 +1,8 @@
+import { apiFetch, API_BASE_URL } from "../utils/api";
 import { useEffect, useMemo, useState } from "react";
 import { Link, Navigate } from "react-router-dom";
 
-const API_BASE_URL = "http://127.0.0.1:5000";
+
 
 function ExerciseLog() {
   const savedUser = localStorage.getItem("user");
@@ -388,7 +389,7 @@ function getTotalDuration(entries) {
 }
 
 async function fetchExercisesByDate(userId, loggedDate) {
-  const response = await fetch(`${API_BASE_URL}/api/exercises/${userId}?date=${loggedDate}`);
+  const response = await apiFetch(`${API_BASE_URL}/api/exercises/${userId}?date=${loggedDate}`);
   const data = await response.json().catch(() => ({
     success: false,
     message: `Exercise API returned status ${response.status}.`,
@@ -402,7 +403,7 @@ async function fetchExercisesByDate(userId, loggedDate) {
 }
 
 async function createExerciseEntry(userId, exerciseData) {
-  const response = await fetch(`${API_BASE_URL}/api/exercises`, {
+  const response = await apiFetch(`${API_BASE_URL}/api/exercises`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -425,7 +426,7 @@ async function createExerciseEntry(userId, exerciseData) {
 }
 
 async function deleteExerciseEntry(exerciseId, userId) {
-  const response = await fetch(`${API_BASE_URL}/api/exercises/${exerciseId}`, {
+  const response = await apiFetch(`${API_BASE_URL}/api/exercises/${exerciseId}`, {
     method: "DELETE",
     headers: {
       "Content-Type": "application/json",

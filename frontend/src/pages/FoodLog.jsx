@@ -1,7 +1,8 @@
-﻿import { useEffect, useMemo, useState } from "react";
+import { apiFetch, API_BASE_URL } from "../utils/api";
+import { useEffect, useMemo, useState } from "react";
 import { Link, Navigate } from "react-router-dom";
 
-const API_BASE_URL = "http://127.0.0.1:5000";
+
 
 function FoodLog() {
   const savedUser = localStorage.getItem("user");
@@ -365,7 +366,7 @@ function getPhotoUrl(photoPath) {
 }
 
 async function fetchFoodsByDate(userId, loggedDate) {
-  const response = await fetch(`${API_BASE_URL}/api/foods/${userId}?date=${loggedDate}`);
+  const response = await apiFetch(`${API_BASE_URL}/api/foods/${userId}?date=${loggedDate}`);
   const data = await response.json().catch(() => ({
     success: false,
     message: `Food API returned status ${response.status}.`,
@@ -379,7 +380,7 @@ async function fetchFoodsByDate(userId, loggedDate) {
 }
 
 async function createFoodEntry(userId, foodData) {
-  const response = await fetch(`${API_BASE_URL}/api/foods`, {
+  const response = await apiFetch(`${API_BASE_URL}/api/foods`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -406,7 +407,7 @@ async function uploadFoodPhoto(foodId, userId, photo) {
   formData.append("user_id", userId);
   formData.append("photo", photo);
 
-  const response = await fetch(`${API_BASE_URL}/api/foods/${foodId}/photo`, {
+  const response = await apiFetch(`${API_BASE_URL}/api/foods/${foodId}/photo`, {
     method: "POST",
     body: formData,
   });
@@ -423,7 +424,7 @@ async function uploadFoodPhoto(foodId, userId, photo) {
 }
 
 async function deleteFoodEntry(foodId, userId) {
-  const response = await fetch(`${API_BASE_URL}/api/foods/${foodId}`, {
+  const response = await apiFetch(`${API_BASE_URL}/api/foods/${foodId}`, {
     method: "DELETE",
     headers: {
       "Content-Type": "application/json",

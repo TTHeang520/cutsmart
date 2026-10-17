@@ -1,3 +1,4 @@
+import { apiFetch, API_BASE_URL } from "../utils/api";
 import { useEffect, useRef, useState } from "react";
 import { Link, Navigate, useNavigate } from "react-router-dom";
 import HeroMascot from "../components/HeroMascot";
@@ -6,7 +7,7 @@ import dashboardMascot from "../assets/companions/dashboard_mascot.png";
 import { getJourneyTheme } from "../data/journeyThemes";
 import { getWeightStats } from "../utils/weightUtils";
 
-const API_BASE_URL = "http://127.0.0.1:5000";
+
 
 function Dashboard() {
   const navigate = useNavigate();
@@ -94,7 +95,14 @@ function Dashboard() {
     };
   }, [isProfileMenuOpen]);
 
-  function handleLogout() {
+  async function handleLogout() {
+    try {
+      const response = await apiFetch("/api/logout", { method: "POST" });
+      if (!response.ok) throw new Error("Logout failed");
+    } catch {
+      window.alert("Could not log out. Please check your connection and retry.");
+      return;
+    }
     localStorage.removeItem("user");
     navigate("/login");
   }
@@ -577,7 +585,7 @@ function WeightPreview({ history, plan }) {
 
 async function fetchOptionalJson(url) {
   try {
-    const response = await fetch(url);
+    const response = await apiFetch(url);
     const data = await response.json();
 
     if (!response.ok || data.success === false) {

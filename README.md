@@ -5,8 +5,9 @@
 CutSmart is a React/Vite + Flask web app with SQLite persistence. It supports
 plans, archived journeys, weight tracking, food photos, exercise categories,
 and calendar views. This release is for running locally on your own computer.
-It is not yet suitable for an internet-facing service: the API currently trusts
-client-supplied user IDs without authenticated sessions.
+Server-verified sessions, ownership checks, private photos and CSRF protection
+are implemented. Public hosting still needs HTTPS, same-origin API routing,
+persistent storage and login rate limiting.
 
 ### Start the App
 

@@ -15,7 +15,9 @@ class JourneySmokeTest(unittest.TestCase):
             try:
                 api = importlib.import_module("app")
                 database.init_db()
+                api.init_auth(api.app)
                 client = api.app.test_client()
+                client.environ_base["HTTP_X_CUTSMART_REQUEST"] = "1"
                 response = client.post("/api/register", json={
                     "username": "release-test", "email": "test@example.com",
                     "password": "test-password-only",
@@ -25,6 +27,7 @@ class JourneySmokeTest(unittest.TestCase):
                     "email": "test@example.com", "password": "test-password-only",
                 }).get_json()
                 user_id = login["user"]["id"]
+                client.environ_base["HTTP_X_CSRF_TOKEN"] = login["csrf_token"]
                 inputs = {
                     "age": 25, "gender": "male", "height_cm": 175,
                     "current_weight_kg": 80, "target_weight_kg": 72,
@@ -55,7 +58,7 @@ class JourneySmokeTest(unittest.TestCase):
                 self.assertEqual(len(archived.get_json()["weights"]), 2)
                 self.assertEqual(client.get(
                     f"/api/users/{user_id + 1}/journeys/{journey_id}/weights"
-                ).status_code, 404)
+                ).status_code, 403)
                 database.init_db()
                 self.assertEqual(len(database.get_weight_history(user_id, journey_id)), 2)
             finally:

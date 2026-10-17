@@ -1,7 +1,8 @@
+import { apiFetch, API_BASE_URL } from "../utils/api";
 import { useEffect, useMemo, useState } from "react";
 import { Link, Navigate } from "react-router-dom";
 
-const API_BASE_URL = "http://127.0.0.1:5000";
+
 const EMPTY_ENTRIES = {
   food: [],
   exercise: [],
@@ -182,7 +183,7 @@ async function fetchEntriesForDate(userId, dateString) {
 }
 
 async function fetchCalendarJson(url) {
-  const response = await fetch(url);
+  const response = await apiFetch(url);
   const data = await response.json().catch(() => null);
 
   if (response.status === 404) {

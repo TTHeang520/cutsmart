@@ -1,9 +1,10 @@
+import { apiFetch, API_BASE_URL } from "../utils/api";
 import { useEffect, useMemo, useState } from "react";
 import { Link, Navigate } from "react-router-dom";
 import WeightLineChart from "../components/WeightLineChart";
 import { getWeightStats } from "../utils/weightUtils";
 
-const API_BASE_URL = "http://127.0.0.1:5000";
+
 
 function WeightTrack() {
   const savedUser = localStorage.getItem("user");
@@ -321,7 +322,7 @@ function formatNumber(value) {
 }
 
 async function fetchWeightHistory(userId) {
-  const response = await fetch(`${API_BASE_URL}/api/weights/history/${userId}`);
+  const response = await apiFetch(`${API_BASE_URL}/api/weights/history/${userId}`);
   const data = await response.json().catch(() => ({
     success: false,
     message: `Weight history API returned status ${response.status}.`,
@@ -335,7 +336,7 @@ async function fetchWeightHistory(userId) {
 }
 
 async function saveWeightEntry(userId, weightKg, loggedDate) {
-  const response = await fetch(`${API_BASE_URL}/api/weights`, {
+  const response = await apiFetch(`${API_BASE_URL}/api/weights`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",

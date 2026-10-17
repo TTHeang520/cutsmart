@@ -1,3 +1,4 @@
+import { apiFetch } from "../utils/api";
 import { useEffect, useState } from "react";
 import { Link, Navigate } from "react-router-dom";
 import CompanionMascot from "../components/CompanionMascot";
@@ -17,7 +18,7 @@ function Welcome() {
 
     async function fetchLatestPlan() {
       try {
-        const response = await fetch(`/api/plans/latest/${userId}`);
+        const response = await apiFetch(`/api/plans/latest/${userId}`);
         const data = await response.json();
 
         if (!isCurrent || !response.ok || data.success === false || !data.plan) {

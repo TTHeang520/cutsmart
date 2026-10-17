@@ -1,8 +1,9 @@
+import { apiFetch, API_BASE_URL } from "../utils/api";
 import { useEffect, useMemo, useState } from "react";
 import { Link, Navigate, useNavigate } from "react-router-dom";
 import { getWeightStats } from "../utils/weightUtils";
 
-const API_BASE_URL = "http://127.0.0.1:5000";
+
 
 function JourneyHistory() {
   const navigate = useNavigate();
@@ -258,7 +259,7 @@ function JourneyStat({ label, value, icon, detail }) {
 }
 
 async function fetchRequiredJson(url) {
-  const response = await fetch(url);
+  const response = await apiFetch(url);
   const data = await response.json().catch(() => ({
     success: false,
     message: `API returned status ${response.status}.`,

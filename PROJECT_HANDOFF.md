@@ -1,6 +1,12 @@
 # CutSmart Project Handoff
 
 This document is the working context for a new developer or a new Codex account.
+Authentication update (2026-10-18): auth.py implements revocable eight-hour
+database sessions, hashed tokens, CSRF checks and user ownership enforcement.
+Photos require ownership. Frontend utils/api.js uses same-origin /api requests.
+Production requires HTTPS and CUTSMART_ENV=production for Secure cookies.
+Older authentication descriptions below are historical; use the updated API
+contract. Login rate limiting and hosting remain outstanding.
 Release wrap-up: 2026-10-18. Current checkout: `C:\CUTSMART\cutsmart`.
 Earlier absolute paths below describe the previous computer layout; use your
 actual clone directory. See README.md for portable setup commands.

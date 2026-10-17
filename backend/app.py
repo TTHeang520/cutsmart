@@ -1,9 +1,11 @@
 import json
+import os
 import sqlite3
 from datetime import date, time
 
-from flask import Flask, request, send_from_directory
-from flask_cors import CORS
+from flask import Flask, request, send_from_directory, g, make_response
+from auth import init_auth, issue_session, COOKIE_NAME, SESSION_SECONDS
+from database import get_db_connection
 from database import init_db, create_user, get_user_from_email, get_active_journey, start_new_journey, save_user_plan, get_latest_user_plan, save_weight_log, get_weight_history, get_weight_by_date, get_latest_weight, save_food_log, get_food_history, get_food_logs_by_date, update_food_log, delete_food_log, save_exercise_log, get_exercise_history, get_exercise_logs_by_date, update_exercise_log, delete_exercise_log, get_user_journeys, get_journey_for_user, get_plans_by_journey, get_food_entry, update_food_photo_path
 from planner import generate_plan
 from werkzeug.exceptions import RequestEntityTooLarge
@@ -13,7 +15,7 @@ from uuid import uuid4
 from PIL import Image, UnidentifiedImageError
 
 app = Flask(__name__)
-CORS(app)
+app.config["SESSION_COOKIE_SECURE"] = os.environ.get("CUTSMART_ENV") == "production"
 FOOD_PHOTO_FOLDER = (
     Path(__file__).resolve().parent
     / "uploads"
@@ -70,6 +72,33 @@ def detect_image_extension(photo):
     return format_extensions.get(image_format)
 
 init_db()
+init_auth(app)
+
+
+@app.after_request
+def private_response(response):
+    if request.path.startswith("/api/"):
+        response.headers["Cache-Control"] = "no-store"
+        response.headers["X-Content-Type-Options"] = "nosniff"
+    return response
+
+
+@app.get("/api/session")
+def current_session():
+    return {"success": True, "user_id": g.user_id, "csrf_token": g.csrf_token}
+
+
+@app.post("/api/logout")
+def logout():
+    connection = get_db_connection()
+    try:
+        connection.execute("DELETE FROM auth_sessions WHERE token_hash = ?", (g.session_hash,))
+        connection.commit()
+    finally:
+        connection.close()
+    response = make_response({"success": True})
+    response.delete_cookie(COOKIE_NAME, path="/")
+    return response
 
 
 @app.route("/")
@@ -84,13 +113,15 @@ def test():
 
 @app.route("/api/register", methods=["POST"])
 def register():
-    data = request.get_json()
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return {"success": False, "message": "Expected a JSON object"}, 400
 
     username = data.get("username")
     email = data.get("email")
     password = data.get("password")
 
-    if not username or not email or not password:
+    if not all(isinstance(value, str) and value.strip() for value in (username, email, password)):
         return {
             "success": False,
             "message": "Username, email, and password are required"
@@ -114,12 +145,14 @@ def register():
 
 @app.route("/api/login", methods=["POST"])
 def login():
-    data = request.get_json()
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return {"success": False, "message": "Expected a JSON object"}, 400
 
     email = data.get("email")
     password = data.get("password")
 
-    if not email or not password:
+    if not all(isinstance(value, str) and value.strip() for value in (email, password)):
         return {
             "success": False,
             "message": "Email and password are required"
@@ -141,15 +174,21 @@ def login():
             "message": "Invalid email or password"
         }, 401
 
-    return {
+    token, csrf = issue_session(user[0])
+    response = make_response({
         "success": True,
+        "csrf_token": csrf,
         "message": "Login successful",
         "user": {
             "id": user[0],
             "username": user[1],
             "email": user[2]
         }
-    }
+    })
+    response.set_cookie(COOKIE_NAME, token, max_age=SESSION_SECONDS,
+                        httponly=True, secure=app.config["SESSION_COOKIE_SECURE"],
+                        samesite="Lax", path="/")
+    return response
 
 
 @app.route("/api/plan", methods=["POST"])
@@ -794,6 +833,16 @@ def delete_food_photo(food_id):
     methods=["GET"]
 )
 def serve_uploaded_photo(photo_path):
+    connection = get_db_connection()
+    try:
+        owner = connection.execute(
+            "SELECT id FROM food_logs WHERE photo_path = ? AND user_id = ?",
+            (photo_path, g.user_id),
+        ).fetchone()
+    finally:
+        connection.close()
+    if owner is None:
+        return {"success": False, "message": "Photo not found"}, 404
     return send_from_directory(
         FOOD_PHOTO_FOLDER.parent,
         photo_path
@@ -1573,4 +1622,4 @@ def delete_exercise_entry(exercise_id):
     }
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run(debug=os.environ.get("FLASK_DEBUG") == "1")
