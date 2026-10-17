@@ -1,5 +1,14 @@
 # CutSmart
 
+## Downloadable Windows App
+
+Windows x64 users can download **CutSmart-Windows-x64.zip** from the
+[GitHub releases](https://github.com/TTHeang520/cutsmart/releases), extract all
+files, then double-click **CutSmart.exe**. No Python or Node.js installation is
+needed. Keep the application window open. Records and photos stay on your own
+computer in `%LOCALAPPDATA%\CutSmart`. See [local app guide](docs/LOCAL_APP.md).
+The Source code downloads are for developers, not the packaged application.
+
 ## Local Preview Release
 
 CutSmart is a React/Vite + Flask web app with SQLite persistence. It supports

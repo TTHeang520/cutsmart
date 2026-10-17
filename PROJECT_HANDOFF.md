@@ -10,6 +10,13 @@ how to run it locally, and what remains before a public launch.
 
 ## 1. Project in One Paragraph
 
+Windows packaging update: backend/desktop.py is a local-only launcher using an
+available loopback port, browser auto-open, and %LOCALAPPDATA%/CutSmart for data.
+scripts/build-windows.ps1 creates a PyInstaller one-folder ZIP with the React build.
+scripts/test-package.py verifies the EXE using temporary records across restart.
+The Windows-package workflow can reproduce it manually. See docs/LOCAL_APP.md.
+This downloadable application is separate from the still-unprovisioned website.
+
 Hosting-package update: Dockerfile and .dockerignore now package the compiled
 frontend with the backend, excluding local data and credentials. See
 docs/HOSTING_SETUP.md. No container build has been run locally (Docker absent),

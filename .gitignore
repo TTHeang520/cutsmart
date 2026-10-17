@@ -1,5 +1,7 @@
 __pycache__/
 .venv/
+/build/
+/release/
 .env
 .env.*
 !.env.example
