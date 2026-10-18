@@ -49,6 +49,23 @@ class JourneySmokeTest(unittest.TestCase):
                 self.assertEqual(updated["journey_id"], journey_id)
                 self.assertNotEqual(updated["plan_id"], first["plan_id"])
                 self.assertEqual(len(database.get_weight_history(user_id, journey_id)), 2)
+                option_inputs = {**inputs, "desired_timeline_weeks": 1}
+                for option in ("fastest_safe", "steady"):
+                    option_response = client.post("/api/plan", json={
+                        **option_inputs, "plan_option": option,
+                    })
+                    self.assertEqual(option_response.status_code, 200)
+                    option_plan = option_response.get_json()["plan"]
+                    saved_option = client.post("/api/plans/save", json={
+                        "user_id": user_id, "mode": "update",
+                        "input_data": option_inputs, "plan_result": option_plan,
+                    })
+                    self.assertEqual(saved_option.status_code, 200)
+                    self.assertEqual(saved_option.get_json()["journey_id"], journey_id)
+                    latest = dict(database.get_latest_user_plan(user_id))
+                    self.assertEqual(latest["daily_deficit"], option_plan["daily_deficit"])
+                    self.assertEqual(latest["timeline_status"], option_plan["timeline_status"])
+                    self.assertEqual(len(database.get_weight_history(user_id, journey_id)), 2)
                 new = client.post("/api/plans/save", json={**payload, "mode": "new"}).get_json()
                 self.assertNotEqual(new["journey_id"], journey_id)
                 self.assertEqual(len(database.get_weight_history(user_id, new["journey_id"])), 1)

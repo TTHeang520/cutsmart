@@ -263,6 +263,33 @@ function Plan() {
     }
   }
 
+  async function handlePlanOption(planOption) {
+    if (isLoading) return;
+    setIsLoading(true);
+    setMessage("");
+    try {
+      const inputData = getFormDataFromPlan(plan);
+      if (inputData.desired_timeline_weeks === "") inputData.desired_timeline_weeks = null;
+      const response = await apiFetch("/api/plan", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...inputData, plan_option: planOption }),
+      });
+      const data = await response.json();
+      if (!response.ok || data.success === false) {
+        throw new Error(data.message || "Could not calculate this option.");
+      }
+      const updatedPlan = await saveGeneratedPlan(user, "update", inputData, data.plan);
+      setPlan(updatedPlan);
+      localStorage.setItem(getLatestPlanKey(user), JSON.stringify(updatedPlan));
+      setMessage("Plan option saved.");
+    } catch (error) {
+      setMessage(error.message || "Could not save this option. Your previous plan is unchanged.");
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
   if (!user) {
     return <Navigate to="/login" replace />;
   }
@@ -336,10 +363,15 @@ function Plan() {
         ) : planView === "summary" ? (
           <PlanSummary
             plan={plan}
+            onPlanOption={handlePlanOption}
+            isLoading={isLoading}
+            message={message}
             onCreateNewPlan={handleCreateNewPlan}
           />
         ) : (
           <ResultReveal
+            onPlanOption={handlePlanOption}
+            isLoading={isLoading}
             message={message}
             plan={plan}
             resultStep={resultStep}
@@ -388,9 +420,11 @@ function OnboardingCard({ onStart }) {
   );
 }
 
-function PlanSummary({ plan, onCreateNewPlan }) {
+function PlanSummary({ plan, onCreateNewPlan, onPlanOption, isLoading, message }) {
   return (
     <section className="plan-summary-page">
+      {message && <p role="status">{message}</p>}
+      <PlanOptionChoice plan={plan} onPlanOption={onPlanOption} isLoading={isLoading} />
       <div className="plan-summary-hero">
         <div>
           <span className="daily-dashboard-eyebrow">My Current Plan</span>
@@ -755,6 +789,8 @@ function ReviewItem({ label, value }) {
 }
 
 function ResultReveal({
+  onPlanOption,
+  isLoading,
   message,
   plan,
   resultStep,
@@ -852,7 +888,7 @@ function ResultReveal({
       button: "Finish",
       body: (
         <div className="details-stack">
-          <PlanComparison plan={plan} />
+          <PlanComparison plan={plan} onPlanOption={onPlanOption} isLoading={isLoading} />
           <div className="details-grid">
             <ResultStat
               label="Current BMI"
@@ -904,6 +940,7 @@ function ResultReveal({
           </div>
         )}
 
+        {message && resultStep > 0 && <p role="status">{message}</p>}
         <div className="reveal-item reveal-body">{screen.body}</div>
 
         <div className="result-actions reveal-item reveal-button">
@@ -936,7 +973,7 @@ function ResultReveal({
   );
 }
 
-function PlanComparison({ plan }) {
+function PlanComparison({ plan, onPlanOption, isLoading }) {
   return (
     <section className="plan-comparison">
       <div>
@@ -971,7 +1008,7 @@ function PlanComparison({ plan }) {
 
       {plan.alternative_plan && (
         <div className="alternative-plan-note">
-          <strong>Fastest safe option:</strong>{" "}
+          <strong>Fastest option within app limits:</strong>{" "}
           {formatNumber(plan.alternative_plan.daily_deficit)} kcal daily deficit
           for about{" "}
           {formatNumber(plan.alternative_plan.recommended_timeline_weeks)} weeks.
@@ -979,7 +1016,27 @@ function PlanComparison({ plan }) {
       )}
 
       {plan.warning && <div className="comparison-warning">{plan.warning}</div>}
+      <PlanOptionChoice plan={plan} onPlanOption={onPlanOption} isLoading={isLoading} />
     </section>
+  );
+}
+
+function PlanOptionChoice({ plan, onPlanOption, isLoading }) {
+  if (!plan.alternative_plan) return null;
+  const fasterSelected = plan.timeline_status === "fastest_safe";
+  return (
+    <fieldset disabled={isLoading} className="plan-option-choice">
+      <legend>Plan pace</legend>
+      <label>
+        <input type="radio" name="plan-pace" checked={!fasterSelected}
+          onChange={() => onPlanOption("steady")} /> Steady
+      </label>
+      <label>
+        <input type="radio" name="plan-pace" checked={fasterSelected}
+          onChange={() => onPlanOption("fastest_safe")} /> Faster (within app limits)
+      </label>
+      {isLoading && <span role="status">Saving plan...</span>}
+    </fieldset>
   );
 }
 

@@ -2,12 +2,13 @@
 
 ## Downloadable Windows App
 
-Windows x64 users can download **CutSmart-Windows-x64.zip** from the
-[GitHub releases](https://github.com/TTHeang520/cutsmart/releases), extract all
-files, then double-click **CutSmart.exe**. No Python or Node.js installation is
-needed. Keep the application window open. Records and photos stay on your own
-computer in `%LOCALAPPDATA%\CutSmart`. See [local app guide](docs/LOCAL_APP.md).
-The Source code downloads are for developers, not the packaged application.
+**Preview downloads withdrawn on 2026-10-18 while bugs are being fixed.**
+There is no currently recommended packaged release. Source remains available
+for development and local testing using the setup instructions below.
+Existing downloads are not automatically updated or removed from users' devices.
+Packaged-app records remain in `%LOCALAPPDATA%\CutSmart`.
+The [local app guide](docs/LOCAL_APP.md) describes packaging and usage for a future
+release; GitHub source archives are not executable applications.
 
 ## Local Preview Release
 

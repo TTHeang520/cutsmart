@@ -109,6 +109,9 @@ def calculate_deficit_from_timeline(current_weight_kg, target_weight_kg, desired
     return round(required_daily_deficit)
 
 def generate_plan(data):
+    plan_option = data.get("plan_option", "steady")
+    if plan_option not in ("steady", "fastest_safe"):
+        return None
     age = data["age"]
     gender = data["gender"]
     height_cm = data["height_cm"]
@@ -164,6 +167,13 @@ def generate_plan(data):
                         max_safe_deficit
                     )
                 }
+
+    if plan_option == "fastest_safe":
+        if alternative_plan is None:
+            return None
+        daily_deficit = max_safe_deficit
+        timeline_status = "fastest_safe"
+        warning = "Faster option selected within CutSmart's limits. Timeline is an estimate, not a guarantee of safety or results."
 
     if daily_deficit <= 0:
         return None

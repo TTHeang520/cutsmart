@@ -470,6 +470,39 @@ CI configuration is .github/workflows/checks.yml. It installs Python dependencie
 runs unittest, installs frontend dependencies, runs lint and builds on pushes/PRs.
 Inspect the actual GitHub Actions run before claiming a particular remote run passed.
 
+## 2026-10-18 Local Follow-up: Plan Pace and Release Hold
+
+- Fixed the dashboard streak flame's corrupted CSS character using a Unicode
+  escape. The streak itself still has placeholder logic (zero days, Monday active).
+- Added a selectable Steady / Faster pace to the plan result comparison and saved
+  plan view, only when the planner supplies an alternative. Previously the faster
+  alternative was informational only and the steady plan was automatically saved.
+- POST /api/plan accepts optional plan_option: steady (default) or fastest_safe.
+  Faster selection uses the existing deficit cap without converting the rounded
+  timeline back to a deficit; recalculates diet/exercise allocation, calories,
+  macros and timeline; sets timeline_status to fastest_safe. Invalid/unavailable
+  selections fail rather than bypassing limits. The alternative remains available
+  so users can switch back. No database migration is needed.
+- Frontend saves selections with mode update, adding a plan revision within the
+  active journey, preserving the baseline and logs. Controls wait for save success
+  before showing the selected option and disable while saving. Errors are shown.
+- These limits are app heuristics, not personalised medical safety guarantees.
+  Labels now call the choice faster within app limits. Rounded weeks are estimates.
+- Protein remains 1.2 g/kg/day. Future work: categorise resistance training and
+  relevant user needs, review evidence-based targets, then rebalance macros.
+  Do not silently change existing saved plans. No protein changes this round.
+- Verification: frontend lint/build passed; all 13 backend tests passed. Added
+  planner tests across strategies, unavailable/invalid option rejection, and
+  API/database checks for same-journey pace saves and retained weight history.
+  Browser checks with mocked API verified both radio choices send update saves,
+  and mobile screenshot showed no horizontal overflow. These browser checks are
+  not a full real-server end-to-end walkthrough.
+- User requested NO new release yet and wants to publish the next release
+  personally with guidance. Source fixes are being committed/pushed at the user's
+  request. Preview releases v0.1.0, v0.2.0 and v0.2.1 are withdrawn due to remaining
+  bugs; Git tags and history are retained. No new package or release is published.
+  Guide Windows build, smoke testing and GitHub asset upload only after approval.
+
 ## 17. Next Developer Checklist and Transfer Notes
 
 - Start by checking git status and remote main; this document is a dated snapshot.

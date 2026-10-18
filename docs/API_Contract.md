@@ -2072,3 +2072,21 @@ If the entry does not exist or belongs to another user:
   "message": "Exercise entry not found"
 }
 ```
+# Plan Pace Selection (Local Update, 2026-10-18)
+
+`POST /api/plan` accepts an optional `plan_option` alongside existing inputs:
+
+- `steady` (default): preserves the existing generation behaviour, including
+  accepting a requested timeline when it meets existing limits.
+- `fastest_safe`: selects the faster alternative only when the same inputs would
+  produce `alternative_plan`. Unknown or unavailable choices return HTTP 400.
+
+The faster response contains a complete recalculated plan, including calories,
+diet/exercise allocation, macros and timeline, with `timeline_status: fastest_safe`.
+The alternative metadata remains available for switching back. This option uses
+existing application limits; it is not an individual medical safety guarantee.
+
+To persist a selected pace, pass the generated response through the existing
+`POST /api/plans/save` request with `mode: update`, original `input_data` and
+the returned `plan_result`. This creates a plan revision under the active journey;
+it does not reset the baseline or logs. Existing saved rows need no migration.

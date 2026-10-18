@@ -4903,6 +4903,29 @@ button:disabled {
   background: transparent;
 }
 
+.plan-option-choice {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin: 16px 0;
+  padding: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 8px;
+}
+
+.plan-option-choice label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.plan-option-choice input {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
+
 .streak-dot-row .active::before {
   background: #7cff6b;
   box-shadow: 0 0 18px rgba(124, 255, 107, 0.36);
@@ -5580,7 +5603,7 @@ button:disabled {
 }
 
 .streak-dot-row .active::before {
-  content: "ðŸ”¥";
+  content: "\1F525";
   width: 24px;
   height: 24px;
   color: #fb923c;
