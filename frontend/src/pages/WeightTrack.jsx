@@ -1,6 +1,7 @@
 import { apiFetch, API_BASE_URL } from "../utils/api";
 import { useEffect, useMemo, useState } from "react";
 import { Link, Navigate } from "react-router-dom";
+import { LayoutDashboard, Scale, ArrowDownUp, TrendingDown, TrendingUp } from "lucide-react";
 import WeightLineChart from "../components/WeightLineChart";
 import { getWeightStats } from "../utils/weightUtils";
 
@@ -99,33 +100,33 @@ function WeightTrack() {
             <p>Track your weight trend and stay on course.</p>
           </div>
           <div className="weight-header-actions">
-            <Link to="/dashboard"><span aria-hidden="true">â–¦</span>Dashboard</Link>
+            <Link to="/dashboard"><LayoutDashboard size={20} aria-hidden="true" />Dashboard</Link>
           </div>
         </header>
 
         <div className="tracker-summary-grid weight-stat-grid">
           <TrackerMetric
-            icon="â–£"
+            icon={<Scale size={28} />}
             label="Average"
             value={weightStats.averageWeight ? `${formatNumber(weightStats.averageWeight)} kg` : "--"}
             detail={getDateRange(weightStats.chartData)}
           />
           <TrackerMetric
-            icon="â†“"
+            icon={<ArrowDownUp size={28} />}
             label="Change"
             value={formatSignedWeight(weightStats.weightChange)}
             detail="vs starting weight"
             tone="purple"
           />
           <TrackerMetric
-            icon="âŒ"
+            icon={<TrendingDown size={28} />}
             label="Lowest"
             value={weightStats.lowestEntry ? `${formatNumber(weightStats.lowestEntry.weight_kg)} kg` : "--"}
             detail={weightStats.lowestEntry?.logged_date || "No data yet"}
             tone="green"
           />
           <TrackerMetric
-            icon="âŒ"
+            icon={<TrendingUp size={28} />}
             label="Highest"
             value={weightStats.highestEntry ? `${formatNumber(weightStats.highestEntry.weight_kg)} kg` : "--"}
             detail={weightStats.highestEntry?.logged_date || "No data yet"}
