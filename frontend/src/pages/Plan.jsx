@@ -1,4 +1,5 @@
 import { apiFetch } from "../utils/api";
+import { getToday } from "../utils/dateUtils";
 import { useEffect, useState } from "react";
 import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
 import CompanionMascot from "../components/CompanionMascot";
@@ -245,11 +246,6 @@ function Plan() {
       // New users and "Create New Plan" use mode "new"; edits to the current plan use "update".
       const saveMode = planSaveMode;
       const savedPlan = await saveGeneratedPlan(user, saveMode, requestBody, data.plan);
-
-      if (saveMode === "new") {
-        saveJourneyArchiveSnapshot(user, getStoredLatestPlan(user));
-        resetActiveJourneyTracking(user);
-      }
 
       setPlan(savedPlan);
       localStorage.setItem(getLatestPlanKey(user), JSON.stringify(savedPlan));
@@ -1073,6 +1069,8 @@ async function saveGeneratedPlan(user, mode, inputData, planResult) {
       mode,
       input_data: inputData,
       plan_result: planResult,
+      // The baseline weight belongs to the user's local calendar day, not the server's UTC day.
+      start_date: getToday(),
     }),
   });
 
@@ -1176,118 +1174,6 @@ function getStoredLatestPlan(user) {
   } catch {
     return null;
   }
-}
-
-function saveJourneyArchiveSnapshot(user, plan) {
-  if (!user?.id || !plan?.journey_id) {
-    return;
-  }
-
-  const snapshot = {
-    plan,
-    weights: getStoredWeightEntries(user),
-    foods: getStoredEntriesByPrefix(`cutsmart_food_log_${user.id}_`).map(normalizeFoodEntry),
-    exercises: getStoredEntriesByPrefix(`cutsmart_exercise_log_${user.id}_`).map(normalizeExerciseEntry),
-    saved_at: new Date().toISOString(),
-  };
-
-  localStorage.setItem(
-    `cutsmart_journey_snapshot_${user.id}_${plan.journey_id}`,
-    JSON.stringify(snapshot)
-  );
-}
-
-function getStoredWeightEntries(user) {
-  if (!user?.id) {
-    return [];
-  }
-
-  return getStoredEntries(`cutsmart_weight_entries_${user.id}`);
-}
-
-function getStoredEntries(storageKey) {
-  if (!storageKey) {
-    return [];
-  }
-
-  const rawEntries = localStorage.getItem(storageKey);
-
-  if (!rawEntries) {
-    return [];
-  }
-
-  try {
-    return JSON.parse(rawEntries);
-  } catch {
-    return [];
-  }
-}
-
-function getStoredEntriesByPrefix(prefix) {
-  const entries = [];
-
-  for (let index = 0; index < localStorage.length; index += 1) {
-    const key = localStorage.key(index);
-
-    if (!key?.startsWith(prefix)) {
-      continue;
-    }
-
-    const loggedDate = key.slice(prefix.length);
-    const savedEntries = getStoredEntries(key);
-
-    savedEntries.forEach((entry) => {
-      entries.push({ ...entry, logged_date: entry.logged_date || loggedDate });
-    });
-  }
-
-  return entries;
-}
-
-function normalizeFoodEntry(entry) {
-  return {
-    ...entry,
-    food_name: entry.food_name || entry.mealName,
-    calories: Number(entry.calories || 0),
-    logged_date: entry.logged_date || entry.createdAt?.slice(0, 10),
-  };
-}
-
-function normalizeExerciseEntry(entry) {
-  return {
-    ...entry,
-    exercise_name: entry.exercise_name || entry.exerciseName,
-    calories_burned: Number(entry.calories_burned ?? entry.caloriesBurned ?? 0),
-    duration_minutes: Number(entry.duration_minutes ?? entry.duration ?? 0),
-    category: entry.category || "other",
-    logged_date: entry.logged_date || entry.createdAt?.slice(0, 10),
-  };
-}
-
-function resetActiveJourneyTracking(user) {
-  if (!user?.id) {
-    return;
-  }
-
-  localStorage.removeItem(`cutsmart_weight_entries_${user.id}`);
-  removeStoredEntriesByPrefix(`cutsmart_food_log_${user.id}_`);
-  removeStoredEntriesByPrefix(`cutsmart_exercise_log_${user.id}_`);
-  removeStoredEntriesByPrefix(`cutsmart_calendar_${user.id}_`);
-  removeStoredEntriesByPrefix(`cutsmart_streak_${user.id}`);
-}
-
-function removeStoredEntriesByPrefix(prefix) {
-  const keysToRemove = [];
-
-  for (let index = 0; index < localStorage.length; index += 1) {
-    const key = localStorage.key(index);
-
-    if (key?.startsWith(prefix)) {
-      keysToRemove.push(key);
-    }
-  }
-
-  keysToRemove.forEach((key) => localStorage.removeItem(key));
 }
 
 function getFormDataFromPlan(plan) {

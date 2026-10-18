@@ -1,4 +1,5 @@
 import { apiFetch, API_BASE_URL } from "../utils/api";
+import { getToday, toDateString } from "../utils/dateUtils";
 import { useEffect, useMemo, useState } from "react";
 import { Link, Navigate } from "react-router-dom";
 
@@ -150,9 +151,9 @@ function CalendarEntries({ title, entries, emptyText }) {
 
 async function fetchEntriesForDate(userId, dateString) {
   const [foodData, exerciseData, weightData] = await Promise.all([
-    fetchCalendarJson(`${API_BASE_URL}/api/foods/${userId}?date=${dateString}`),
-    fetchCalendarJson(`${API_BASE_URL}/api/exercises/${userId}?date=${dateString}`),
-    fetchCalendarJson(`${API_BASE_URL}/api/weights/${userId}?date=${dateString}`),
+    fetchCalendarJson(`${API_BASE_URL}/api/foods/${userId}?date=${dateString}&all_journeys=1`),
+    fetchCalendarJson(`${API_BASE_URL}/api/exercises/${userId}?date=${dateString}&all_journeys=1`),
+    fetchCalendarJson(`${API_BASE_URL}/api/weights/${userId}?date=${dateString}&all_journeys=1`),
   ]);
 
   return {
@@ -215,17 +216,6 @@ function buildMonthDays(date) {
       isCurrentMonth: current.getMonth() === month,
     };
   });
-}
-
-function getToday() {
-  return toDateString(new Date());
-}
-
-function toDateString(date) {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
 }
 
 function formatNumber(value) {

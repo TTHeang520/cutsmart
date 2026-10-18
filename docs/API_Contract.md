@@ -59,6 +59,12 @@ Frontend should send JSON with these exact key names:
 }
 ```
 
+### Validation
+
+- `email` is trimmed and lowercased. It must look like `name@domain.tld` with at least two letters after the last dot. Addresses that look like a misspelling of Gmail (`gmail.co`, `gmial.com`, ...) are rejected with a "Did you mean ...@gmail.com?" message.
+- `password` must be at least 8 characters. This applies to new registrations only; login does not re-check length.
+- `username` is trimmed and must be 30 characters or fewer.
+
 ### For Success Response
 
 ```json
@@ -380,6 +386,8 @@ Frontend should send JSON with these exact top-level key names:
 ```
 
 ### Request Field Notes
+
+`start_date` is optional (`YYYY-MM-DD`). When a new journey is started, it dates the initial weight record using the user's local day. If omitted, the server's UTC date is used.
 
 `user_id` should be the logged-in user's `id` from the login response.
 
@@ -872,6 +880,41 @@ If the journey does not exist or belongs to another user, the route returns:
 }
 ```
 
+## Daily Activity
+
+Route:
+
+```text
+GET /api/activity/<user_id>?start=<YYYY-MM-DD>&end=<YYYY-MM-DD>
+```
+
+Per-day totals across every journey, used for the dashboard streak and week overviews.
+Only days with at least one log are returned. The automatic initial (baseline) weight of
+a journey is not counted. The range may be at most 400 days.
+
+### For Success Response
+
+```json
+{
+  "success": true,
+  "message": "Daily activity fetched successfully",
+  "days": [
+    {
+      "date": "2026-10-16",
+      "calories_eaten": 800,
+      "calories_burned": 250,
+      "active_minutes": 30,
+      "food_entries": 2,
+      "exercise_entries": 1,
+      "weight_logged": false
+    }
+  ]
+}
+```
+
+A streak is counted on the frontend as consecutive days with any log, ending today
+(today does not break the streak until it is over).
+
 ## Weight Log
 
 Weight Log allows a registered user to record body weight by date inside the user's active journey.
@@ -894,7 +937,8 @@ POST /api/weights
 {
   "user_id": 1,
   "weight_kg": 77.9,
-  "logged_date": "2026-06-30"
+  "logged_date": "2026-06-30",
+  "note": "After morning run"
 }
 ```
 
@@ -906,9 +950,11 @@ POST /api/weights
 
 `logged_date` must be a real date using `YYYY-MM-DD` format.
 
-If the user already has a weight record for that date, the backend updates its `weight_kg` and `updated_at` values.
+`note` is optional text (trimmed, up to 200 characters). Empty or missing means no note.
 
-If `logged_date` matches the active journey's start date, updating that weight also corrects the journey's `initial_weight_kg`. Later weight entries do not change the journey's initial weight.
+If the user already has a weight record for that date, the backend updates its `weight_kg`, `note` and `updated_at` values.
+
+The journey's initial (baseline) weight is a separate `is_initial` record and is never changed by this route, even on the start date.
 
 ### For Success Response
 
@@ -920,7 +966,8 @@ If `logged_date` matches the active journey's start date, updating that weight a
     "user_id": 1,
     "journey_id": 3,
     "weight_kg": 77.9,
-    "logged_date": "2026-06-30"
+    "logged_date": "2026-06-30",
+    "note": "After morning run"
   }
 }
 ```
@@ -987,6 +1034,34 @@ No active journey:
 {
   "success": false,
   "message": "Active journey not found. Create a plan first"
+}
+```
+
+## Delete Weight
+
+Route:
+
+```text
+DELETE /api/weights/<weight_id>
+```
+
+### Request
+
+```json
+{
+  "user_id": 1
+}
+```
+
+Only entries in the active journey can be deleted. The journey's initial (baseline)
+weight is protected and returns 400; an unknown ID returns 404.
+
+### For Success Response
+
+```json
+{
+  "success": true,
+  "message": "Weight entry deleted successfully"
 }
 ```
 
@@ -1086,6 +1161,9 @@ Route:
 ```text
 GET /api/weights/<user_id>?date=<YYYY-MM-DD>
 ```
+
+Optional `all_journeys=1` searches every journey instead of only the active one (used by the calendar). Without it, a missing active journey returns 404.
+
 
 Example full route:
 
@@ -1533,6 +1611,9 @@ Route:
 GET /api/foods/<user_id>?date=<YYYY-MM-DD>
 ```
 
+Optional `all_journeys=1` searches every journey instead of only the active one (used by the calendar). Without it, a missing active journey returns 404.
+
+
 Example full route:
 
 ```text
@@ -1881,6 +1962,9 @@ Route:
 ```text
 GET /api/exercises/<user_id>?date=<YYYY-MM-DD>
 ```
+
+Optional `all_journeys=1` searches every journey instead of only the active one (used by the calendar). Without it, a missing active journey returns 404.
+
 
 Example full route:
 

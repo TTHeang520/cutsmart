@@ -1,4 +1,6 @@
 import { apiFetch, API_BASE_URL } from "../utils/api";
+import { addDays, getToday, getWeekDates } from "../utils/dateUtils";
+import { calculateStreak, fetchDailyActivity, formatDayCount } from "../utils/activityUtils";
 import { useEffect, useRef, useState } from "react";
 import { Link, Navigate, useNavigate } from "react-router-dom";
 import HeroMascot from "../components/HeroMascot";
@@ -6,8 +8,6 @@ import WeightLineChart from "../components/WeightLineChart";
 import dashboardMascot from "../assets/companions/dashboard_mascot.png";
 import { getJourneyTheme } from "../data/journeyThemes";
 import { getWeightStats } from "../utils/weightUtils";
-
-
 
 function Dashboard() {
   const navigate = useNavigate();
@@ -22,11 +22,14 @@ function Dashboard() {
   const [weightHistory, setWeightHistory] = useState([]);
   const [caloriesEaten, setCaloriesEaten] = useState(0);
   const [caloriesBurned, setCaloriesBurned] = useState(0);
+  const [activityDays, setActivityDays] = useState([]);
   const profileMenuRef = useRef(null);
   const today = getToday();
   const strategy = latestPlan?.strategy || "balanced";
   const theme = getJourneyTheme(strategy);
   const weightStats = getWeightStats({ weights: weightHistory, plan: latestPlan });
+  const streak = calculateStreak(activityDays, today);
+  const week = getWeekSummary(activityDays, today, latestPlan);
 
   useEffect(() => {
     if (!userId) {
@@ -37,11 +40,13 @@ function Dashboard() {
 
     async function fetchDashboardData() {
       try {
-        const [planData, weightData, foodData, exerciseData] = await Promise.all([
-          fetchOptionalJson(`${API_BASE_URL}/api/plans/latest/${userId}`),
+        const [planData, weightData, foodData, exerciseData, activity] = await Promise.all([
+          fetchLatestPlan(userId),
           fetchOptionalJson(`${API_BASE_URL}/api/weights/history/${userId}`),
           fetchOptionalJson(`${API_BASE_URL}/api/foods/${userId}?date=${today}`),
           fetchOptionalJson(`${API_BASE_URL}/api/exercises/${userId}?date=${today}`),
+          // A year of history is enough to count any realistic streak.
+          fetchDailyActivity(userId, addDays(today, -365), today).catch(() => []),
         ]);
 
         if (!isCurrent) {
@@ -51,11 +56,16 @@ function Dashboard() {
         if (planData?.plan) {
           localStorage.setItem(getLatestPlanKey({ id: userId }), JSON.stringify(planData.plan));
           setLatestPlan(planData.plan);
+        } else if (planData?.missing) {
+          // The server has no plan, so a cached one is stale.
+          localStorage.removeItem(getLatestPlanKey({ id: userId }));
+          setLatestPlan(null);
         }
 
         setWeightHistory(Array.isArray(weightData?.history) ? weightData.history : []);
         setCaloriesEaten(Number(foodData?.summary?.total_calories || 0));
         setCaloriesBurned(Number(exerciseData?.summary?.total_calories_burned || 0));
+        setActivityDays(activity);
       } catch {
         // Keep the cached plan only. Active journey logs should not fall back to old localStorage data.
         if (isCurrent) {
@@ -112,8 +122,6 @@ function Dashboard() {
   }
 
   function handleStartNewJourney() {
-    saveJourneyArchiveSnapshot(user, latestPlan);
-    resetActiveJourneyTracking(user);
     setIsStartJourneyConfirmOpen(false);
     navigate("/plan", { state: { planIntent: "new" } });
   }
@@ -316,7 +324,7 @@ function Dashboard() {
             <h2>Quick actions</h2>
             <div className="quick-action-grid">
               <Link className="quick-calendar" to="/calendar"><span className="quick-action-icon" aria-hidden="true">▣</span><span>Calendar</span></Link>
-              <a className="quick-streak" href="#streak" onClick={(event) => event.preventDefault()}><span className="quick-action-icon" aria-hidden="true">🔥</span><span>Streak</span><small>0 days</small></a>
+              <a className="quick-streak" href="#streak" onClick={(event) => event.preventDefault()}><span className="quick-action-icon" aria-hidden="true">🔥</span><span>Streak</span><small>{formatDayCount(streak)}</small></a>
               <a className="quick-reports" href="#reports" onClick={(event) => event.preventDefault()}><span className="quick-action-icon" aria-hidden="true">▥</span><span>Reports</span></a>
               <Link className="quick-weight" to="/weight-track"><span className="quick-action-icon" aria-hidden="true">＋</span><span>Add Weight</span></Link>
             </div>
@@ -327,30 +335,44 @@ function Dashboard() {
           <article className="dashboard-feature-card weekly-overview-card">
             <h2>This week overview</h2>
             <div className="week-pill-row">
-              {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((day, index) => (
-                <span key={day} className={index < 3 ? "done" : index === 3 ? "today" : ""}>
-                  {day}
+              {week.days.map((day) => (
+                <span
+                  key={day.date}
+                  className={[day.isActive ? "done" : "", day.date === today ? "today" : ""].join(" ").trim()}
+                  title={day.isActive ? `${day.date}: logged` : day.date}
+                >
+                  {day.label}
                 </span>
               ))}
             </div>
             <div className="weekly-stats">
-              <MacroPill label="Calories avg" value={`${formatNumber(caloriesEaten)} kcal`} />
-              <MacroPill label="Deficit avg" value={latestPlan ? `${formatNumber(latestPlan.daily_deficit)} kcal` : "--"} />
-              <MacroPill label="Goal progress" value="65%" />
+              <MacroPill
+                label="Calories avg"
+                value={week.averageEaten === null ? "--" : `${formatNumber(week.averageEaten)} kcal`}
+              />
+              <MacroPill
+                label="Deficit avg"
+                value={week.averageDeficit === null ? "--" : `${formatNumber(week.averageDeficit)} kcal`}
+              />
+              <MacroPill
+                label="Goal progress"
+                value={`${formatNumber(weightStats.progressPercent || 0)}%`}
+              />
             </div>
+            <p className="weekly-note">Averages use days with food logged this week. Deficit is estimated from your plan's maintenance calories.</p>
           </article>
 
           <article id="streak" className="dashboard-feature-card streak-card">
             <span className="streak-watermark" aria-hidden="true">🔥</span>
             <span className="daily-dashboard-eyebrow">Your streak</span>
-            <h2>0 days</h2>
+            <h2>{formatDayCount(streak)}</h2>
             <div className="streak-dot-row">
-              {["M", "T", "W", "T", "F", "S", "S"].map((day, index) => (
-                <span key={`${day}-${index}`} className={index === 0 ? "active" : ""}>{day}</span>
+              {week.days.map((day) => (
+                <span key={day.date} className={day.isActive ? "active" : ""}>{day.label.charAt(0)}</span>
               ))}
             </div>
             <p>Current streak</p>
-            <strong>Stay consistent and build your streak!</strong>
+            <strong>{getStreakMessage(streak, activityDays, today)}</strong>
             <Link to="/calendar">View Calendar <span aria-hidden="true">→</span></Link>
           </article>
         </section>
@@ -583,6 +605,60 @@ function WeightPreview({ history, plan }) {
   );
 }
 
+function getWeekSummary(activityDays, today, plan) {
+  const byDate = new Map(activityDays.map((day) => [day.date, day]));
+  const labels = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+  const days = getWeekDates(today).map((date, index) => ({
+    date,
+    label: labels[index],
+    isActive: byDate.has(date),
+  }));
+  const foodDays = days
+    .map((day) => byDate.get(day.date))
+    .filter((day) => day && day.food_entries > 0 && day.date <= today);
+  const maintenance = Number(plan?.maintenance_calories);
+
+  if (foodDays.length === 0) {
+    return { days, averageEaten: null, averageDeficit: null };
+  }
+
+  const average = (values) => values.reduce((total, value) => total + value, 0) / values.length;
+
+  return {
+    days,
+    averageEaten: average(foodDays.map((day) => day.calories_eaten)),
+    averageDeficit: maintenance
+      ? average(foodDays.map((day) => maintenance + day.calories_burned - day.calories_eaten))
+      : null,
+  };
+}
+
+function getStreakMessage(streak, activityDays, today) {
+  const loggedToday = activityDays.some((day) => day.date === today);
+
+  if (streak === 0) {
+    return "Log a meal, workout or weight today to start a streak.";
+  }
+
+  return loggedToday ? "Nice! Today is logged. Keep it going tomorrow." : "Log something today to keep your streak alive.";
+}
+
+// Returns { plan }, { missing: true } when the server has none, or null when unreachable.
+async function fetchLatestPlan(userId) {
+  try {
+    const response = await apiFetch(`${API_BASE_URL}/api/plans/latest/${userId}`);
+
+    if (response.status === 404) {
+      return { missing: true };
+    }
+
+    const data = await response.json();
+    return response.ok && data.plan ? { plan: data.plan } : null;
+  } catch {
+    return null;
+  }
+}
+
 async function fetchOptionalJson(url) {
   try {
     const response = await apiFetch(url);
@@ -614,132 +690,6 @@ function getStoredLatestPlan(user) {
 
 function getLatestPlanKey(user) {
   return user?.id ? `cutsmart_latest_plan_${user.id}` : "cutsmart_latest_plan_guest";
-}
-
-function getStoredWeightEntries(user) {
-  if (!user?.id) {
-    return [];
-  }
-
-  const rawEntries = localStorage.getItem(`cutsmart_weight_entries_${user.id}`);
-
-  if (!rawEntries) {
-    return [];
-  }
-
-  try {
-    return JSON.parse(rawEntries);
-  } catch {
-    return [];
-  }
-}
-
-function getStoredEntries(storageKey) {
-  if (!storageKey) {
-    return [];
-  }
-
-  const rawEntries = localStorage.getItem(storageKey);
-
-  if (!rawEntries) {
-    return [];
-  }
-
-  try {
-    return JSON.parse(rawEntries);
-  } catch {
-    return [];
-  }
-}
-
-function saveJourneyArchiveSnapshot(user, plan) {
-  if (!user?.id || !plan?.journey_id) {
-    return;
-  }
-
-  const snapshot = {
-    plan,
-    weights: getStoredWeightEntries(user),
-    foods: getStoredEntriesByPrefix(`cutsmart_food_log_${user.id}_`).map(normalizeFoodEntry),
-    exercises: getStoredEntriesByPrefix(`cutsmart_exercise_log_${user.id}_`).map(normalizeExerciseEntry),
-    saved_at: new Date().toISOString(),
-  };
-
-  localStorage.setItem(
-    `cutsmart_journey_snapshot_${user.id}_${plan.journey_id}`,
-    JSON.stringify(snapshot)
-  );
-}
-
-function getStoredEntriesByPrefix(prefix) {
-  const entries = [];
-
-  for (let index = 0; index < localStorage.length; index += 1) {
-    const key = localStorage.key(index);
-
-    if (!key?.startsWith(prefix)) {
-      continue;
-    }
-
-    const loggedDate = key.slice(prefix.length);
-    const savedEntries = getStoredEntries(key);
-
-    savedEntries.forEach((entry) => {
-      entries.push({ ...entry, logged_date: entry.logged_date || loggedDate });
-    });
-  }
-
-  return entries;
-}
-
-function normalizeFoodEntry(entry) {
-  return {
-    ...entry,
-    food_name: entry.food_name || entry.mealName,
-    calories: Number(entry.calories || 0),
-    logged_date: entry.logged_date || entry.createdAt?.slice(0, 10),
-  };
-}
-
-function normalizeExerciseEntry(entry) {
-  return {
-    ...entry,
-    exercise_name: entry.exercise_name || entry.exerciseName,
-    calories_burned: Number(entry.calories_burned ?? entry.caloriesBurned ?? 0),
-    duration_minutes: Number(entry.duration_minutes ?? entry.duration ?? 0),
-    category: entry.category || "other",
-    logged_date: entry.logged_date || entry.createdAt?.slice(0, 10),
-  };
-}
-
-function resetActiveJourneyTracking(user) {
-  if (!user?.id) {
-    return;
-  }
-
-  localStorage.removeItem(`cutsmart_weight_entries_${user.id}`);
-  removeStoredEntriesByPrefix(`cutsmart_food_log_${user.id}_`);
-  removeStoredEntriesByPrefix(`cutsmart_exercise_log_${user.id}_`);
-  removeStoredEntriesByPrefix(`cutsmart_calendar_${user.id}_`);
-  removeStoredEntriesByPrefix(`cutsmart_streak_${user.id}`);
-}
-
-function removeStoredEntriesByPrefix(prefix) {
-  const keysToRemove = [];
-
-  for (let index = 0; index < localStorage.length; index += 1) {
-    const key = localStorage.key(index);
-
-    if (key?.startsWith(prefix)) {
-      keysToRemove.push(key);
-    }
-  }
-
-  keysToRemove.forEach((key) => localStorage.removeItem(key));
-}
-
-function getToday() {
-  return new Date().toISOString().slice(0, 10);
 }
 
 function formatLabel(value) {

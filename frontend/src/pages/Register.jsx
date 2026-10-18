@@ -3,11 +3,17 @@ import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import "./Login.css";
 
+// Keep these rules in step with get_email_error in backend/app.py.
+const EMAIL_PATTERN = /^[^@\s]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}$/;
+const GMAIL_TYPO_NAMES = new Set(["gmail", "gmial", "gamil", "gmal", "gmai", "gmaill", "gnail", "gmaul"]);
+const MIN_PASSWORD_LENGTH = 8;
+
 function Register() {
   const navigate = useNavigate();
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [message, setMessage] = useState("");
   const [messageType, setMessageType] = useState("error");
   const [isLoading, setIsLoading] = useState(false);
@@ -18,6 +24,14 @@ function Register() {
     event.preventDefault();
     setMessage("");
     setMessageType("error");
+
+    const validationError = getRegistrationError(username, email, password, confirmPassword);
+
+    if (validationError) {
+      setMessage(validationError);
+      return;
+    }
+
     setIsLoading(true);
 
     try {
@@ -70,13 +84,15 @@ function Register() {
         </div>
 
         <div className="auth-card">
-          <form onSubmit={handleSubmit} className="auth-form">
+          <form onSubmit={handleSubmit} className="auth-form" noValidate>
             <label className="auth-field">
               <span className="auth-field-label">Username</span>
               <span className="auth-input-shell">
                 <span className="auth-input-icon" aria-hidden="true">♙</span>
                 <input
                   type="text"
+                  autoComplete="username"
+                  maxLength={30}
                   value={username}
                   onChange={(event) => setUsername(event.target.value)}
                   placeholder="Choose a username"
@@ -91,6 +107,7 @@ function Register() {
                 <span className="auth-input-icon" aria-hidden="true">✉</span>
                 <input
                   type="email"
+                  autoComplete="email"
                   value={email}
                   onChange={(event) => setEmail(event.target.value)}
                   placeholder="Email address"
@@ -105,9 +122,11 @@ function Register() {
                 <span className="auth-input-icon" aria-hidden="true">⌘</span>
                 <input
                   type={showPassword ? "text" : "password"}
+                  autoComplete="new-password"
+                  minLength={MIN_PASSWORD_LENGTH}
                   value={password}
                   onChange={(event) => setPassword(event.target.value)}
-                  placeholder="Password"
+                  placeholder={`At least ${MIN_PASSWORD_LENGTH} characters`}
                   required
                 />
                 <button
@@ -118,6 +137,21 @@ function Register() {
                 >
                   {showPassword ? "◌" : "◎"}
                 </button>
+              </span>
+            </label>
+
+            <label className="auth-field">
+              <span className="auth-field-label">Confirm password</span>
+              <span className="auth-input-shell">
+                <span className="auth-input-icon" aria-hidden="true">⌘</span>
+                <input
+                  type={showPassword ? "text" : "password"}
+                  autoComplete="new-password"
+                  value={confirmPassword}
+                  onChange={(event) => setConfirmPassword(event.target.value)}
+                  placeholder="Type your password again"
+                  required
+                />
               </span>
             </label>
 
@@ -141,6 +175,34 @@ function Register() {
       </section>
     </main>
   );
+}
+
+function getRegistrationError(username, email, password, confirmPassword) {
+  if (!username.trim()) {
+    return "Choose a username.";
+  }
+
+  const normalizedEmail = email.trim().toLowerCase();
+
+  if (!EMAIL_PATTERN.test(normalizedEmail)) {
+    return "Enter a valid email address, for example name@gmail.com.";
+  }
+
+  const [localPart, domain] = normalizedEmail.split("@");
+
+  if (GMAIL_TYPO_NAMES.has(domain.split(".")[0]) && !["gmail.com", "googlemail.com"].includes(domain)) {
+    return `Did you mean ${localPart}@gmail.com?`;
+  }
+
+  if (password.length < MIN_PASSWORD_LENGTH) {
+    return `Password must be at least ${MIN_PASSWORD_LENGTH} characters.`;
+  }
+
+  if (password !== confirmPassword) {
+    return "Passwords do not match.";
+  }
+
+  return "";
 }
 
 export default Register;
