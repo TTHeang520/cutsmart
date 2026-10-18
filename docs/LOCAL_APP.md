@@ -1,6 +1,9 @@
 # CutSmart for Windows - Local Preview
 
-Download CutSmart-Windows-x64.zip from GitHub release Assets. Extract All, then
+Preview downloads were withdrawn on 2026-10-18 pending bug fixes. These
+instructions apply to local builds and future releases, not a current download.
+
+When a release is available, download its CutSmart-Windows-x64.zip. Extract All, then
 double-click CutSmart.exe. Keep the entire folder, including _internal. The browser
 opens automatically. Keep the CutSmart window open; close it to stop the app.
 No Python, Node.js, Docker or separate backend setup is needed.
