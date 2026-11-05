@@ -1,9 +1,18 @@
 import { apiFetch, API_BASE_URL } from "../utils/api";
+import { getToday, toDateString } from "../utils/dateUtils";
 import { useEffect, useMemo, useState } from "react";
 import { Link, Navigate } from "react-router-dom";
 import { LayoutDashboard, Scale, ArrowDownUp, TrendingDown, TrendingUp } from "lucide-react";
 import WeightLineChart from "../components/WeightLineChart";
 import { getWeightStats } from "../utils/weightUtils";
+
+const CHART_RANGES = [
+  { key: "W", days: 7 },
+  { key: "M", days: 30 },
+  { key: "6M", days: 182 },
+  { key: "Y", days: 365 },
+  { key: "All", days: null },
+];
 
 
 
@@ -14,7 +23,7 @@ function WeightTrack() {
   const [weight, setWeight] = useState("");
   const [loggedDate, setLoggedDate] = useState(getToday());
   const [note, setNote] = useState("");
-  const [activeRange, setActiveRange] = useState("W");
+  const [activeRange, setActiveRange] = useState("All");
   const [history, setHistory] = useState([]);
   const [isLoadingHistory, setIsLoadingHistory] = useState(Boolean(user?.id));
   const [isSaving, setIsSaving] = useState(false);
@@ -61,6 +70,7 @@ function WeightTrack() {
     [history]
   );
   const weightStats = getWeightStats({ weights: sortedHistory, plan: latestPlan });
+  const rangeChartData = filterByRange(weightStats.chartData, activeRange);
 
   async function handleSubmit(event) {
     event.preventDefault();
@@ -68,7 +78,7 @@ function WeightTrack() {
     setError("");
 
     try {
-      await saveWeightEntry(user.id, Number(weight), loggedDate);
+      await saveWeightEntry(user.id, Number(weight), loggedDate, note);
       const nextHistory = await fetchWeightHistory(user.id);
 
       setHistory(nextHistory);
@@ -78,6 +88,21 @@ function WeightTrack() {
       setError(requestError.message || "Could not save your weight entry.");
     } finally {
       setIsSaving(false);
+    }
+  }
+
+  async function handleDelete(entry) {
+    if (!window.confirm(`Delete the weight entry for ${entry.logged_date}?`)) {
+      return;
+    }
+
+    setError("");
+
+    try {
+      await deleteWeightEntry(entry.id, user.id);
+      setHistory(await fetchWeightHistory(user.id));
+    } catch (requestError) {
+      setError(requestError.message || "Could not delete this weight entry.");
     }
   }
 
@@ -139,18 +164,22 @@ function WeightTrack() {
 
         <section className="weight-chart-card">
           <div className="weight-range-tabs">
-            {["D", "W", "M", "6M", "Y"].map((range) => (
+            {CHART_RANGES.map(({ key }) => (
               <button
                 type="button"
-                key={range}
-                className={activeRange === range ? "active" : ""}
-                onClick={() => setActiveRange(range)}
+                key={key}
+                className={activeRange === key ? "active" : ""}
+                onClick={() => setActiveRange(key)}
               >
-                {range}
+                {key}
               </button>
             ))}
           </div>
-          <WeightLineChart entries={weightStats.chartData} />
+          <WeightLineChart
+            entries={rangeChartData}
+            sampleWhenEmpty={weightStats.chartData.length === 0}
+            emptyText="No weight entries in this range."
+          />
         </section>
 
         <div className="weight-track-grid">
@@ -206,6 +235,7 @@ function WeightTrack() {
                 value={note}
                 onChange={(event) => setNote(event.target.value)}
                 placeholder="Optional"
+                maxLength={200}
               />
             </label>
             <button type="submit" disabled={isSaving}>
@@ -229,9 +259,19 @@ function WeightTrack() {
                 <span className="weight-diff-pill">
                   {formatWeightDifference(entry, entries[index + 1])}
                 </span>
-                <button type="button" onClick={() => handleEdit(entry)} aria-label="Edit weight entry">
-                  Edit
-                </button>
+                <div className="weight-entry-actions">
+                  <button type="button" onClick={() => handleEdit(entry)} aria-label={`Edit weight entry for ${entry.logged_date}`}>
+                    Edit
+                  </button>
+                  {entry.is_initial ? (
+                    // The journey baseline cannot be deleted; keep the buttons aligned.
+                    <span className="weight-start-spacer" title="The starting weight cannot be deleted" />
+                  ) : (
+                    <button type="button" onClick={() => handleDelete(entry)} aria-label={`Delete weight entry for ${entry.logged_date}`}>
+                      Delete
+                    </button>
+                  )}
+                </div>
               </div>
             ))
           )}
@@ -312,8 +352,18 @@ function getStoredLatestPlan(user) {
   }
 }
 
-function getToday() {
-  return new Date().toISOString().slice(0, 10);
+function filterByRange(entries, rangeKey) {
+  const range = CHART_RANGES.find(({ key }) => key === rangeKey);
+
+  if (!range?.days) {
+    return entries;
+  }
+
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - range.days);
+  const cutoffDate = toDateString(cutoff);
+
+  return entries.filter((entry) => entry.logged_date >= cutoffDate);
 }
 
 function formatNumber(value) {
@@ -336,7 +386,7 @@ async function fetchWeightHistory(userId) {
   return Array.isArray(data.history) ? data.history : [];
 }
 
-async function saveWeightEntry(userId, weightKg, loggedDate) {
+async function saveWeightEntry(userId, weightKg, loggedDate, note) {
   const response = await apiFetch(`${API_BASE_URL}/api/weights`, {
     method: "POST",
     headers: {
@@ -346,6 +396,7 @@ async function saveWeightEntry(userId, weightKg, loggedDate) {
       user_id: userId,
       weight_kg: weightKg,
       logged_date: loggedDate,
+      note,
     }),
   });
 
@@ -359,6 +410,24 @@ async function saveWeightEntry(userId, weightKg, loggedDate) {
   }
 
   return data.weight;
+}
+
+async function deleteWeightEntry(weightId, userId) {
+  const response = await apiFetch(`${API_BASE_URL}/api/weights/${weightId}`, {
+    method: "DELETE",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ user_id: userId }),
+  });
+  const data = await response.json().catch(() => ({
+    success: false,
+    message: `Delete weight API returned status ${response.status}.`,
+  }));
+
+  if (!response.ok || data.success === false) {
+    throw new Error(data.message || "Could not delete this weight entry.");
+  }
 }
 
 export default WeightTrack;

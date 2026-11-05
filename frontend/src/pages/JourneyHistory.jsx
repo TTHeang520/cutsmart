@@ -1,4 +1,5 @@
 import { apiFetch, API_BASE_URL } from "../utils/api";
+import { parseServerTimestamp } from "../utils/dateUtils";
 import { useEffect, useMemo, useState } from "react";
 import { Link, Navigate, useNavigate } from "react-router-dom";
 import { getWeightStats } from "../utils/weightUtils";
@@ -301,7 +302,7 @@ function formatActiveTimeline(startedAt) {
     return "-";
   }
 
-  const start = new Date(startedAt);
+  const start = parseServerTimestamp(startedAt);
   const today = new Date();
   const days = Math.max(Math.ceil((today - start) / 86400000), 0);
 
@@ -313,7 +314,7 @@ function formatDate(value) {
     return "-";
   }
 
-  return new Date(value).toLocaleDateString(undefined, {
+  return parseServerTimestamp(value).toLocaleDateString(undefined, {
     day: "numeric",
     month: "short",
     year: "numeric",
@@ -325,8 +326,8 @@ function formatTimeline(startedAt, endedAt) {
     return "-";
   }
 
-  const start = new Date(startedAt);
-  const end = new Date(endedAt);
+  const start = parseServerTimestamp(startedAt);
+  const end = parseServerTimestamp(endedAt);
   const days = Math.max(Math.ceil((end - start) / 86400000), 0);
 
   return `${days} ${days === 1 ? "day" : "days"}`;

@@ -1,7 +1,11 @@
 import { apiFetch, API_BASE_URL } from "../utils/api";
+import { getCurrentTime, getToday } from "../utils/dateUtils";
 import { useEffect, useMemo, useState } from "react";
 import { Link, Navigate } from "react-router-dom";
+import { Apple, Coffee, Flame, Hourglass, LayoutDashboard, Target, Utensils } from "lucide-react";
 
+const PHOTO_TYPES = ["image/jpeg", "image/png", "image/webp"];
+const MAX_PHOTO_BYTES = 5 * 1024 * 1024;
 
 
 function FoodLog() {
@@ -20,6 +24,9 @@ function FoodLog() {
   const [fat, setFat] = useState("");
   const [notes, setNotes] = useState("");
   const [photo, setPhoto] = useState(null);
+  const [photoInputKey, setPhotoInputKey] = useState(0);
+  const [editingEntry, setEditingEntry] = useState(null);
+  const [removePhoto, setRemovePhoto] = useState(false);
   const [isLoading, setIsLoading] = useState(Boolean(user?.id));
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState("");
@@ -69,41 +76,95 @@ function FoodLog() {
 
   async function handleSubmit(event) {
     event.preventDefault();
-    setIsSaving(true);
     setError("");
 
-    try {
-      const savedFood = await createFoodEntry(user.id, {
-        food_name: mealName,
-        calories: Number(calories),
-        meal_type: mealType,
-        logged_date: loggedDate,
-        logged_time: loggedTime,
-        protein_g: protein,
-        carbs_g: carbs,
-        fat_g: fat,
-        notes,
-      });
+    const photoError = getPhotoError(photo);
 
-      if (photo) {
-        await uploadFoodPhoto(savedFood.id, user.id, photo);
+    if (photoError) {
+      setError(photoError);
+      return;
+    }
+
+    setIsSaving(true);
+    let savedFood = null;
+    const foodData = {
+      food_name: mealName,
+      calories: Number(calories),
+      meal_type: mealType,
+      logged_date: loggedDate,
+      logged_time: loggedTime,
+      protein_g: protein,
+      carbs_g: carbs,
+      fat_g: fat,
+      notes,
+    };
+
+    try {
+      savedFood = editingEntry
+        ? await updateFoodEntry(editingEntry.id, user.id, foodData)
+        : await createFoodEntry(user.id, foodData);
+
+      if (editingEntry && removePhoto && !photo && editingEntry.photo_path) {
+        try {
+          await deleteFoodPhoto(savedFood.id, user.id);
+        } catch (photoDeleteError) {
+          setError(`Meal saved, but the photo was not removed: ${photoDeleteError.message}`);
+        }
       }
 
-      const nextEntries = await fetchFoodsByDate(user.id, loggedDate);
-      setEntries(nextEntries);
+      if (photo) {
+        try {
+          await uploadFoodPhoto(savedFood.id, user.id, photo);
+        } catch (photoUploadError) {
+          // The meal itself is saved; keep it rather than inviting a duplicate resubmit.
+          setError(`Meal saved, but the photo was not attached: ${photoUploadError.message}`);
+        }
+      }
+
       resetForm();
+      setEntries(await fetchFoodsByDate(user.id, loggedDate));
     } catch (requestError) {
-      setError(requestError.message || "Could not save your meal.");
+      setError(
+        savedFood
+          ? "Meal saved, but the list could not refresh. Reload the page to see it."
+          : requestError.message || "Could not save your meal."
+      );
     } finally {
       setIsSaving(false);
     }
   }
 
+  function handleEdit(entry) {
+    setError("");
+    setEditingEntry(entry);
+    setMealName(entry.food_name || "");
+    setCalories(String(entry.calories ?? ""));
+    setMealType(entry.meal_type || "lunch");
+    setLoggedDate(entry.logged_date);
+    setLoggedTime(entry.logged_time || getCurrentTime());
+    setProtein(formatOptional(entry.protein_g));
+    setCarbs(formatOptional(entry.carbs_g));
+    setFat(formatOptional(entry.fat_g));
+    setNotes(entry.notes || "");
+    setPhoto(null);
+    setRemovePhoto(false);
+    setPhotoInputKey((key) => key + 1);
+  }
+
   async function handleDelete(entryId) {
+    if (!window.confirm("Delete this meal?")) {
+      return;
+    }
+
     setError("");
 
     try {
       await deleteFoodEntry(entryId, user.id);
+
+      if (editingEntry?.id === entryId) {
+        resetForm();
+      }
+
       const nextEntries = await fetchFoodsByDate(user.id, loggedDate);
       setEntries(nextEntries);
     } catch (requestError) {
@@ -121,6 +182,9 @@ function FoodLog() {
     setFat("");
     setNotes("");
     setPhoto(null);
+    setPhotoInputKey((key) => key + 1);
+    setEditingEntry(null);
+    setRemovePhoto(false);
   }
 
   if (!user) {
@@ -137,7 +201,7 @@ function FoodLog() {
 
         <div className="tracker-summary-grid app-log-metrics">
           <TrackerMetric
-            icon="Target"
+            icon={<Target size={26} />}
             label="Daily target"
             value={`${formatNumber(targetCalories)} kcal`}
             detail="Selected date goal"
@@ -145,14 +209,14 @@ function FoodLog() {
             tone="purple"
           />
           <TrackerMetric
-            icon="Fire"
+            icon={<Flame size={26} />}
             label="Eaten"
             value={`${formatNumber(totalCalories)} kcal`}
             detail={loggedDate}
             tone="green"
           />
           <TrackerMetric
-            icon="Left"
+            icon={<Hourglass size={26} />}
             label={remainingCalories >= 0 ? "Remaining" : "Exceeded"}
             value={`${formatNumber(Math.abs(remainingCalories))} kcal`}
             detail={remainingCalories >= 0 ? "Left for this date" : "Over target"}
@@ -166,10 +230,10 @@ function FoodLog() {
         <section className="app-log-grid">
           <form className="tracker-form app-log-form" onSubmit={handleSubmit}>
             <div className="app-log-card-heading">
-              <span className="app-log-icon tone-green" aria-hidden="true">Food</span>
+              <span className="app-log-icon tone-green" aria-hidden="true"><Utensils size={26} /></span>
               <div>
-                <h2>Add Meal</h2>
-                <p>What did you eat?</p>
+                <h2>{editingEntry ? "Edit Meal" : "Add Meal"}</h2>
+                <p>{editingEntry ? `Editing ${editingEntry.food_name}` : "What did you eat?"}</p>
               </div>
             </div>
 
@@ -250,10 +314,34 @@ function FoodLog() {
             </label>
             <label className="app-upload-placeholder">
               Food photo
-              <input type="file" accept="image/*" onChange={(event) => setPhoto(event.target.files?.[0] || null)} />
-              <span>{photo ? photo.name : "Optional photo for this meal."}</span>
+              <input
+                key={photoInputKey}
+                type="file"
+                accept={PHOTO_TYPES.join(",")}
+                onChange={(event) => setPhoto(event.target.files?.[0] || null)}
+              />
+              <span>{getPhotoFieldText(photo, editingEntry)}</span>
             </label>
-            <button type="submit" disabled={isSaving}>{isSaving ? "Saving..." : "Add Meal"}</button>
+            {editingEntry?.photo_path && !photo && (
+              <label className="app-log-checkbox">
+                <input
+                  type="checkbox"
+                  checked={removePhoto}
+                  onChange={(event) => setRemovePhoto(event.target.checked)}
+                />
+                Remove current photo
+              </label>
+            )}
+            <div className="app-log-form-actions">
+              <button type="submit" disabled={isSaving}>
+                {isSaving ? "Saving..." : editingEntry ? "Save Changes" : "Add Meal"}
+              </button>
+              {editingEntry && (
+                <button type="button" className="app-log-cancel" onClick={resetForm} disabled={isSaving}>
+                  Cancel
+                </button>
+              )}
+            </div>
           </form>
 
           <TrackerList
@@ -261,6 +349,8 @@ function FoodLog() {
             total={`${formatNumber(totalCalories)} kcal`}
             emptyText="No meals logged for this date."
             entries={entries}
+            editingId={editingEntry?.id}
+            onEdit={handleEdit}
             onDelete={handleDelete}
           />
         </section>
@@ -276,7 +366,7 @@ function TrackerHeader({ title, subtitle }) {
         <h1>{title}</h1>
         <p>{subtitle}</p>
       </div>
-      <Link to="/dashboard"><span aria-hidden="true">Dash</span>Dashboard</Link>
+      <Link to="/dashboard"><LayoutDashboard size={18} aria-hidden="true" />Dashboard</Link>
     </header>
   );
 }
@@ -298,7 +388,7 @@ function TrackerMetric({ icon, label, value, detail, progress, tone = "green" })
   );
 }
 
-function TrackerList({ title, total, entries, emptyText, onDelete }) {
+function TrackerList({ title, total, entries, emptyText, editingId, onEdit, onDelete }) {
   return (
     <section className="tracker-list app-log-list">
       <div className="app-log-list-header">
@@ -309,7 +399,7 @@ function TrackerList({ title, total, entries, emptyText, onDelete }) {
         <p className="app-log-empty">{emptyText}</p>
       ) : (
         entries.map((entry) => (
-          <article className="app-log-entry" key={entry.id}>
+          <article className={`app-log-entry${entry.id === editingId ? " is-editing" : ""}`} key={entry.id}>
             {entry.photo_path ? (
               <img className="app-log-entry-photo" src={getPhotoUrl(entry.photo_path)} alt={entry.food_name} />
             ) : (
@@ -321,9 +411,14 @@ function TrackerList({ title, total, entries, emptyText, onDelete }) {
               {entry.notes && <small>{entry.notes}</small>}
             </div>
             <span>{formatNumber(entry.calories)} kcal</span>
-            <button type="button" onClick={() => onDelete(entry.id)} aria-label={`Delete ${entry.food_name}`}>
-              Delete
-            </button>
+            <div className="app-log-entry-actions">
+              <button type="button" onClick={() => onEdit(entry)} aria-label={`Edit ${entry.food_name}`}>
+                Edit
+              </button>
+              <button type="button" onClick={() => onDelete(entry.id)} aria-label={`Delete ${entry.food_name}`}>
+                Delete
+              </button>
+            </div>
           </article>
         ))
       )}
@@ -335,14 +430,14 @@ function getMealIcon(mealName = "") {
   const name = mealName.toLowerCase();
 
   if (name.includes("coffee") || name.includes("tea") || name.includes("drink")) {
-    return "Drink";
+    return <Coffee size={24} />;
   }
 
   if (name.includes("fruit") || name.includes("banana") || name.includes("yogurt")) {
-    return "Fruit";
+    return <Apple size={24} />;
   }
 
-  return "Meal";
+  return <Utensils size={24} />;
 }
 
 function formatMealMeta(entry) {
@@ -402,6 +497,79 @@ async function createFoodEntry(userId, foodData) {
   return data.food;
 }
 
+async function updateFoodEntry(foodId, userId, foodData) {
+  const response = await apiFetch(`${API_BASE_URL}/api/foods/${foodId}`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      user_id: userId,
+      ...foodData,
+    }),
+  });
+  const data = await response.json().catch(() => ({
+    success: false,
+    message: `Update food API returned status ${response.status}.`,
+  }));
+
+  if (!response.ok || data.success === false) {
+    throw new Error(data.message || "Could not update your meal.");
+  }
+
+  return data.food;
+}
+
+async function deleteFoodPhoto(foodId, userId) {
+  const response = await apiFetch(`${API_BASE_URL}/api/foods/${foodId}/photo`, {
+    method: "DELETE",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ user_id: userId }),
+  });
+  const data = await response.json().catch(() => ({
+    success: false,
+    message: `Delete photo API returned status ${response.status}.`,
+  }));
+
+  if (!response.ok || data.success === false) {
+    throw new Error(data.message || "Could not remove the food photo.");
+  }
+}
+
+function getPhotoFieldText(photo, editingEntry) {
+  if (photo) {
+    return photo.name;
+  }
+
+  if (editingEntry?.photo_path) {
+    return "Choose a new photo to replace the current one.";
+  }
+
+  return "Optional photo for this meal.";
+}
+
+function formatOptional(value) {
+  return value === null || value === undefined ? "" : String(value);
+}
+
+function getPhotoError(photo) {
+  if (!photo) {
+    return "";
+  }
+
+  if (!PHOTO_TYPES.includes(photo.type)) {
+    return "Photo must be a JPG, PNG, or WebP image.";
+  }
+
+  if (photo.size > MAX_PHOTO_BYTES) {
+    return "Photo must not exceed 5 MB.";
+  }
+
+  return "";
+}
+
 async function uploadFoodPhoto(foodId, userId, photo) {
   const formData = new FormData();
   formData.append("user_id", userId);
@@ -457,14 +625,6 @@ function getStoredLatestPlan(user) {
   } catch {
     return null;
   }
-}
-
-function getToday() {
-  return new Date().toISOString().slice(0, 10);
-}
-
-function getCurrentTime() {
-  return new Date().toTimeString().slice(0, 5);
 }
 
 function formatLabel(value) {

@@ -1,6 +1,23 @@
 import { apiFetch, API_BASE_URL } from "../utils/api";
+import { getCurrentTime, getToday, getWeekDates } from "../utils/dateUtils";
+import { fetchDailyActivity } from "../utils/activityUtils";
 import { useEffect, useMemo, useState } from "react";
 import { Link, Navigate } from "react-router-dom";
+import {
+  Activity,
+  Bike,
+  Clock,
+  Dumbbell,
+  Flame,
+  Footprints,
+  Hourglass,
+  LayoutDashboard,
+  Leaf,
+  StretchHorizontal,
+  Trophy,
+  Volleyball,
+  Zap,
+} from "lucide-react";
 
 
 
@@ -17,6 +34,8 @@ function ExerciseLog() {
   const [loggedDate, setLoggedDate] = useState(today);
   const [loggedTime, setLoggedTime] = useState(getCurrentTime());
   const [notes, setNotes] = useState("");
+  const [editingEntry, setEditingEntry] = useState(null);
+  const [weekActivity, setWeekActivity] = useState([]);
   const [isLoading, setIsLoading] = useState(Boolean(user?.id));
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState("");
@@ -57,6 +76,31 @@ function ExerciseLog() {
     };
   }, [user?.id, loggedDate]);
 
+  useEffect(() => {
+    if (!user?.id || !loggedDate) {
+      return;
+    }
+
+    let isCurrent = true;
+    const weekDates = getWeekDates(loggedDate);
+
+    fetchDailyActivity(user.id, weekDates[0], weekDates[6])
+      .then((days) => {
+        if (isCurrent) {
+          setWeekActivity(days);
+        }
+      })
+      .catch(() => {
+        if (isCurrent) {
+          setWeekActivity([]);
+        }
+      });
+
+    return () => {
+      isCurrent = false;
+    };
+  }, [user?.id, loggedDate, entries]);
+
   const totalBurned = useMemo(
     () => entries.reduce((total, entry) => total + Number(entry.calories_burned || 0), 0),
     [entries]
@@ -69,16 +113,22 @@ function ExerciseLog() {
     setIsSaving(true);
     setError("");
 
+    const exerciseData = {
+      exercise_name: exerciseName,
+      duration_minutes: Number(duration),
+      calories_burned: Number(caloriesBurned),
+      logged_date: loggedDate,
+      logged_time: loggedTime,
+      category,
+      notes: notes.trim() || null,
+    };
+
     try {
-      await createExerciseEntry(user.id, {
-        exercise_name: exerciseName,
-        duration_minutes: Number(duration),
-        calories_burned: Number(caloriesBurned),
-        logged_date: loggedDate,
-        logged_time: loggedTime,
-        category,
-        notes: notes.trim() || null,
-      });
+      if (editingEntry) {
+        await updateExerciseEntry(editingEntry.id, user.id, exerciseData);
+      } else {
+        await createExerciseEntry(user.id, exerciseData);
+      }
 
       const nextEntries = await fetchExercisesByDate(user.id, loggedDate);
       setEntries(nextEntries);
@@ -90,11 +140,32 @@ function ExerciseLog() {
     }
   }
 
+  function handleEdit(entry) {
+    setError("");
+    setEditingEntry(entry);
+    setExerciseName(entry.exercise_name || "");
+    setDuration(String(entry.duration_minutes ?? ""));
+    setCaloriesBurned(String(entry.calories_burned ?? ""));
+    setCategory(getExerciseCategory(entry));
+    setLoggedDate(entry.logged_date);
+    setLoggedTime(entry.logged_time || getCurrentTime());
+    setNotes(stripCategoryFromNotes(entry.notes));
+  }
+
   async function handleDelete(entryId) {
+    if (!window.confirm("Delete this exercise?")) {
+      return;
+    }
+
     setError("");
 
     try {
       await deleteExerciseEntry(entryId, user.id);
+
+      if (editingEntry?.id === entryId) {
+        resetForm();
+      }
+
       const nextEntries = await fetchExercisesByDate(user.id, loggedDate);
       setEntries(nextEntries);
     } catch (requestError) {
@@ -109,6 +180,7 @@ function ExerciseLog() {
     setCategory("cardio");
     setLoggedTime(getCurrentTime());
     setNotes("");
+    setEditingEntry(null);
   }
 
   if (!user) {
@@ -125,7 +197,7 @@ function ExerciseLog() {
 
         <div className="tracker-summary-grid app-log-metrics exercise-metrics">
           <TrackerMetric
-            icon="Energy"
+            icon={<Zap size={26} />}
             label="Burn target"
             value={`${formatNumber(exerciseTarget)} kcal`}
             detail="Daily goal"
@@ -133,21 +205,21 @@ function ExerciseLog() {
             tone="purple"
           />
           <TrackerMetric
-            icon="Burn"
+            icon={<Flame size={26} />}
             label="Burned"
             value={`${formatNumber(totalBurned)} kcal`}
             detail={loggedDate}
             tone="green"
           />
           <TrackerMetric
-            icon="Left"
+            icon={<Hourglass size={26} />}
             label="Remaining"
             value={`${formatNumber(remainingBurn)} kcal`}
             detail="Left to burn"
             tone="yellow"
           />
           <TrackerMetric
-            icon="Time"
+            icon={<Clock size={26} />}
             label="Active minutes"
             value={`${formatNumber(getTotalDuration(entries))} min`}
             detail="Selected date"
@@ -161,10 +233,10 @@ function ExerciseLog() {
         <section className="app-log-grid">
           <form className="tracker-form app-log-form" onSubmit={handleSubmit}>
             <div className="app-log-card-heading">
-              <span className="app-log-icon tone-purple" aria-hidden="true">Move</span>
+              <span className="app-log-icon tone-purple" aria-hidden="true"><Dumbbell size={26} /></span>
               <div>
-                <h2>Add Exercise</h2>
-                <p>What did you do today?</p>
+                <h2>{editingEntry ? "Edit Exercise" : "Add Exercise"}</h2>
+                <p>{editingEntry ? `Editing ${editingEntry.exercise_name}` : "What did you do today?"}</p>
               </div>
             </div>
 
@@ -241,7 +313,16 @@ function ExerciseLog() {
                 placeholder="Optional note"
               />
             </label>
-            <button type="submit" disabled={isSaving}>{isSaving ? "Saving..." : "Add Exercise"}</button>
+            <div className="app-log-form-actions">
+              <button type="submit" disabled={isSaving}>
+                {isSaving ? "Saving..." : editingEntry ? "Save Changes" : "Add Exercise"}
+              </button>
+              {editingEntry && (
+                <button type="button" className="app-log-cancel" onClick={resetForm} disabled={isSaving}>
+                  Cancel
+                </button>
+              )}
+            </div>
           </form>
 
           <TrackerList
@@ -249,24 +330,31 @@ function ExerciseLog() {
             total={`${formatNumber(totalBurned)} kcal`}
             emptyText="No workouts logged for this date."
             entries={entries}
+            editingId={editingEntry?.id}
+            onEdit={handleEdit}
             onDelete={handleDelete}
           />
         </section>
 
-        <WeeklyOverview entries={entries} exerciseTarget={exerciseTarget} />
+        <WeeklyOverview
+          weekDates={getWeekDates(loggedDate)}
+          activity={weekActivity}
+          today={today}
+          exerciseTarget={exerciseTarget}
+        />
       </section>
     </main>
   );
 }
 
 const exerciseCategories = {
-  cardio: { label: "Cardio", icon: "Cardio", tone: "purple" },
-  strength: { label: "Strength", icon: "Lift", tone: "yellow" },
-  cycling: { label: "Cycling", icon: "Bike", tone: "green" },
-  flexibility: { label: "Flexibility", icon: "Yoga", tone: "purple" },
-  sports: { label: "Sports", icon: "Sport", tone: "blue" },
-  recovery: { label: "Recovery", icon: "Rest", tone: "green" },
-  other: { label: "Other", icon: "Other", tone: "blue" },
+  cardio: { label: "Cardio", icon: <Footprints size={24} />, tone: "purple" },
+  strength: { label: "Strength", icon: <Dumbbell size={24} />, tone: "yellow" },
+  cycling: { label: "Cycling", icon: <Bike size={24} />, tone: "green" },
+  flexibility: { label: "Flexibility", icon: <StretchHorizontal size={24} />, tone: "purple" },
+  sports: { label: "Sports", icon: <Volleyball size={24} />, tone: "blue" },
+  recovery: { label: "Recovery", icon: <Leaf size={24} />, tone: "green" },
+  other: { label: "Other", icon: <Activity size={24} />, tone: "blue" },
 };
 
 function TrackerHeader({ title, subtitle }) {
@@ -276,7 +364,7 @@ function TrackerHeader({ title, subtitle }) {
         <h1>{title}</h1>
         <p>{subtitle}</p>
       </div>
-      <Link to="/dashboard"><span aria-hidden="true">Dash</span>Dashboard</Link>
+      <Link to="/dashboard"><LayoutDashboard size={18} aria-hidden="true" />Dashboard</Link>
     </header>
   );
 }
@@ -298,7 +386,7 @@ function TrackerMetric({ icon, label, value, detail, progress, tone = "green" })
   );
 }
 
-function TrackerList({ title, total, entries, emptyText, onDelete }) {
+function TrackerList({ title, total, entries, emptyText, editingId, onEdit, onDelete }) {
   return (
     <section className="tracker-list app-log-list">
       <div className="app-log-list-header">
@@ -312,7 +400,7 @@ function TrackerList({ title, total, entries, emptyText, onDelete }) {
           const entryCategory = getExerciseCategory(entry);
 
           return (
-            <article className="app-log-entry" key={entry.id}>
+            <article className={`app-log-entry${entry.id === editingId ? " is-editing" : ""}`} key={entry.id}>
               <span className={`app-log-entry-icon tone-${exerciseCategories[entryCategory].tone}`} aria-hidden="true">
                 {exerciseCategories[entryCategory].icon}
               </span>
@@ -322,9 +410,14 @@ function TrackerList({ title, total, entries, emptyText, onDelete }) {
                 {stripCategoryFromNotes(entry.notes) && <small>{stripCategoryFromNotes(entry.notes)}</small>}
               </div>
               <span>{formatNumber(entry.calories_burned)} kcal</span>
-              <button type="button" onClick={() => onDelete(entry.id)} aria-label={`Delete ${entry.exercise_name}`}>
-                Delete
-              </button>
+              <div className="app-log-entry-actions">
+                <button type="button" onClick={() => onEdit(entry)} aria-label={`Edit ${entry.exercise_name}`}>
+                  Edit
+                </button>
+                <button type="button" onClick={() => onDelete(entry.id)} aria-label={`Delete ${entry.exercise_name}`}>
+                  Delete
+                </button>
+              </div>
             </article>
           );
         })
@@ -333,33 +426,42 @@ function TrackerList({ title, total, entries, emptyText, onDelete }) {
   );
 }
 
-function WeeklyOverview({ entries, exerciseTarget }) {
-  const totalBurned = entries.reduce((total, entry) => total + Number(entry.calories_burned || 0), 0);
-  const totalDuration = getTotalDuration(entries);
-  const progress = exerciseTarget ? Math.min((totalBurned / exerciseTarget) * 100, 100) : 0;
+function WeeklyOverview({ weekDates, activity, today, exerciseTarget }) {
+  const labels = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+  const byDate = new Map(activity.map((day) => [day.date, day]));
+  const weekDays = weekDates.map((date) => byDate.get(date)).filter(Boolean);
+  const totalBurned = weekDays.reduce((total, day) => total + Number(day.calories_burned || 0), 0);
+  const totalMinutes = weekDays.reduce((total, day) => total + Number(day.active_minutes || 0), 0);
+  const weeklyTarget = exerciseTarget * 7;
+  const progress = weeklyTarget ? Math.min((totalBurned / weeklyTarget) * 100, 100) : 0;
 
   return (
     <section className="app-log-weekly-card">
       <h2>This week overview</h2>
       <div className="app-log-weekdays">
-        {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((day) => (
-          <span key={day} className={day === new Date().toLocaleDateString(undefined, { weekday: "short" }) ? "active" : ""}>
-            {day}
-          </span>
-        ))}
+        {weekDates.map((date, index) => {
+          const workedOut = Number(byDate.get(date)?.exercise_entries || 0) > 0;
+          const classes = [workedOut ? "has-workout" : "", date === today ? "active" : ""].join(" ").trim();
+
+          return (
+            <span key={date} className={classes} title={workedOut ? `${date}: workout logged` : date}>
+              {labels[index]}
+            </span>
+          );
+        })}
       </div>
       <div className="app-log-weekly-stats">
-        <TrackerMetric icon="Burn" label="Calories burned" value={`${formatNumber(totalBurned)} kcal`} detail="Selected date" tone="purple" />
-        <TrackerMetric icon="Time" label="Active minutes" value={`${formatNumber(totalDuration)} min`} detail="Selected date" tone="blue" />
-        <TrackerMetric icon="Goal" label="Goal progress" value={`${formatNumber(progress)}%`} detail="Daily target" tone="green" />
+        <TrackerMetric icon={<Flame size={26} />} label="Calories burned" value={`${formatNumber(totalBurned)} kcal`} detail="This week" tone="purple" />
+        <TrackerMetric icon={<Clock size={26} />} label="Active minutes" value={`${formatNumber(totalMinutes)} min`} detail="This week" tone="blue" />
+        <TrackerMetric icon={<Trophy size={26} />} label="Goal progress" value={`${formatNumber(progress)}%`} detail="Weekly burn target" tone="green" />
       </div>
     </section>
   );
 }
 
-
-function stripCategoryFromNotes(notes = "") {
-  return notes.replace(/^\[category:[^\]]+\]\s*/, "");
+function stripCategoryFromNotes(notes) {
+  // Notes are null when none were entered; default parameters only cover undefined.
+  return (notes || "").replace(/^\[category:[^\]]+\]\s*/, "");
 }
 
 function getExerciseCategory(entry) {
@@ -400,6 +502,29 @@ async function fetchExercisesByDate(userId, loggedDate) {
   }
 
   return Array.isArray(data.exercises) ? data.exercises : [];
+}
+
+async function updateExerciseEntry(exerciseId, userId, exerciseData) {
+  const response = await apiFetch(`${API_BASE_URL}/api/exercises/${exerciseId}`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      user_id: userId,
+      ...exerciseData,
+    }),
+  });
+  const data = await response.json().catch(() => ({
+    success: false,
+    message: `Update exercise API returned status ${response.status}.`,
+  }));
+
+  if (!response.ok || data.success === false) {
+    throw new Error(data.message || "Could not update your exercise.");
+  }
+
+  return data.exercise;
 }
 
 async function createExerciseEntry(userId, exerciseData) {
@@ -459,14 +584,6 @@ function getStoredLatestPlan(user) {
   } catch {
     return null;
   }
-}
-
-function getToday() {
-  return new Date().toISOString().slice(0, 10);
-}
-
-function getCurrentTime() {
-  return new Date().toTimeString().slice(0, 5);
 }
 
 function formatNumber(value) {

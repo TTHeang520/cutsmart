@@ -19,6 +19,14 @@ function Welcome() {
     async function fetchLatestPlan() {
       try {
         const response = await apiFetch(`/api/plans/latest/${userId}`);
+
+        if (isCurrent && response.status === 404) {
+          // The server has no plan, so a cached one is stale.
+          localStorage.removeItem(getLatestPlanKey({ id: userId }));
+          setLatestPlan(null);
+          return;
+        }
+
         const data = await response.json();
 
         if (!isCurrent || !response.ok || data.success === false || !data.plan) {

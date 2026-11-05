@@ -155,6 +155,7 @@ def init_db():
         weight_kg REAL NOT NULL,
         logged_date TEXT NOT NULL,
         is_initial INTEGER NOT NULL DEFAULT 0,
+        note TEXT,
         created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
         updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (user_id) REFERENCES users (id),
@@ -304,6 +305,13 @@ def init_db():
         cursor.execute("DROP TABLE weight_logs")
         cursor.execute("ALTER TABLE weight_logs_migrated RENAME TO weight_logs")
 
+    weight_columns = {
+        row[1] for row in cursor.execute("PRAGMA table_info(weight_logs)").fetchall()
+    }
+
+    if "note" not in weight_columns:
+        cursor.execute("ALTER TABLE weight_logs ADD COLUMN note TEXT")
+
     cursor.execute("""
         CREATE UNIQUE INDEX IF NOT EXISTS idx_weight_logs_initial_unique
         ON weight_logs (user_id, journey_id)
@@ -451,8 +459,9 @@ def get_user_from_email(email):
     cursor = connection.cursor()
 
     cursor.execute(
-        "SELECT id, username, email, password_hash FROM users WHERE email = ?",
-        (email,)
+        # LOWER() also matches accounts registered before emails were normalised.
+        "SELECT id, username, email, password_hash FROM users WHERE LOWER(email) = ? ORDER BY id LIMIT 1",
+        (email.strip().lower(),)
     )
 
     user = cursor.fetchone()
@@ -523,7 +532,7 @@ def archive_active_journey(user_id):
 
     return archived_rows
 
-def start_new_journey(user_id, initial_weight_kg, target_weight_kg, input_data, plan_result):
+def start_new_journey(user_id, initial_weight_kg, target_weight_kg, input_data, plan_result, start_date=None):
     connection = get_db_connection()
     cursor = connection.cursor()
 
@@ -584,7 +593,7 @@ def start_new_journey(user_id, initial_weight_kg, target_weight_kg, input_data, 
                 user_id,
                 journey_id,
                 initial_weight_kg,
-                journey["started_at"][:10]
+                start_date or journey["started_at"][:10]
             )
         )
 
@@ -770,7 +779,7 @@ def get_latest_user_plan(user_id):
 
     return plan
 
-def save_weight_log(user_id, journey_id, weight_kg, logged_date):
+def save_weight_log(user_id, journey_id, weight_kg, logged_date, note=None):
     connection = get_db_connection()
     cursor = connection.cursor()
 
@@ -781,15 +790,17 @@ def save_weight_log(user_id, journey_id, weight_kg, logged_date):
             journey_id,
             weight_kg,
             logged_date,
-            is_initial
+            is_initial,
+            note
         )
-        VALUES (?, ?, ?, ?, 0)
+        VALUES (?, ?, ?, ?, 0, ?)
         ON CONFLICT(user_id, journey_id, logged_date) WHERE is_initial = 0
         DO UPDATE SET
             weight_kg = excluded.weight_kg,
+            note = excluded.note,
             updated_at = CURRENT_TIMESTAMP
         """,
-        (user_id, journey_id, weight_kg, logged_date)
+        (user_id, journey_id, weight_kg, logged_date, note)
     )
 
     connection.commit()
@@ -842,17 +853,94 @@ def get_weight_by_date(user_id, journey_id, logged_date):
         """
         SELECT *
         FROM weight_logs
-        WHERE user_id = ? AND journey_id = ? AND logged_date = ?
+        WHERE user_id = ? AND (? IS NULL OR journey_id = ?) AND logged_date = ?
         ORDER BY is_initial ASC, id DESC
         LIMIT 1
         """,
-        (user_id, journey_id, logged_date)
+        (user_id, journey_id, journey_id, logged_date)
     )
 
     weight = cursor.fetchone()
     connection.close()
 
     return weight
+
+def get_weight_entry(weight_id, user_id, journey_id):
+    connection = get_db_connection()
+    cursor = connection.cursor()
+
+    cursor.execute(
+        """
+        SELECT *
+        FROM weight_logs
+        WHERE id = ? AND user_id = ? AND journey_id = ?
+        """,
+        (weight_id, user_id, journey_id)
+    )
+
+    weight = cursor.fetchone()
+    connection.close()
+
+    return weight
+
+def delete_weight_log(weight_id, user_id, journey_id):
+    connection = get_db_connection()
+    cursor = connection.cursor()
+
+    # The initial weight is the journey baseline and is never deleted.
+    cursor.execute(
+        """
+        DELETE FROM weight_logs
+        WHERE id = ? AND user_id = ? AND journey_id = ? AND is_initial = 0
+        """,
+        (weight_id, user_id, journey_id)
+    )
+
+    deleted_rows = cursor.rowcount
+    connection.commit()
+    connection.close()
+
+    return deleted_rows
+
+def get_daily_activity(user_id, start_date, end_date):
+    """Per-day log totals across every journey; the automatic baseline weight is not counted."""
+    connection = get_db_connection()
+    cursor = connection.cursor()
+
+    cursor.execute(
+        """
+        SELECT
+            logged_date,
+            SUM(calories_eaten) AS calories_eaten,
+            SUM(calories_burned) AS calories_burned,
+            SUM(active_minutes) AS active_minutes,
+            SUM(food_entries) AS food_entries,
+            SUM(exercise_entries) AS exercise_entries,
+            MAX(weight_logged) AS weight_logged
+        FROM (
+            SELECT logged_date, calories AS calories_eaten, 0 AS calories_burned,
+                   0 AS active_minutes, 1 AS food_entries, 0 AS exercise_entries, 0 AS weight_logged
+            FROM food_logs
+            WHERE user_id = ? AND logged_date BETWEEN ? AND ?
+            UNION ALL
+            SELECT logged_date, 0, calories_burned, duration_minutes, 0, 1, 0
+            FROM exercise_logs
+            WHERE user_id = ? AND logged_date BETWEEN ? AND ?
+            UNION ALL
+            SELECT logged_date, 0, 0, 0, 0, 0, 1
+            FROM weight_logs
+            WHERE user_id = ? AND logged_date BETWEEN ? AND ? AND is_initial = 0
+        )
+        GROUP BY logged_date
+        ORDER BY logged_date
+        """,
+        (user_id, start_date, end_date) * 3
+    )
+
+    days = cursor.fetchall()
+    connection.close()
+
+    return days
 
 def save_food_log(user_id, journey_id, food_data):
     connection = get_db_connection()
@@ -978,10 +1066,10 @@ def get_food_logs_by_date(user_id, journey_id, logged_date):
         """
         SELECT *
         FROM food_logs
-        WHERE user_id = ? AND journey_id = ? AND logged_date = ?
+        WHERE user_id = ? AND (? IS NULL OR journey_id = ?) AND logged_date = ?
         ORDER BY logged_time ASC, id ASC
         """,
-        (user_id, journey_id, logged_date)
+        (user_id, journey_id, journey_id, logged_date)
     )
 
     food_logs = cursor.fetchall()
@@ -1114,10 +1202,10 @@ def get_exercise_logs_by_date(user_id, journey_id, logged_date):
         """
         SELECT *
         FROM exercise_logs
-        WHERE user_id = ? AND journey_id = ? AND logged_date = ?
+        WHERE user_id = ? AND (? IS NULL OR journey_id = ?) AND logged_date = ?
         ORDER BY logged_time ASC, id ASC
         """,
-        (user_id, journey_id, logged_date)
+        (user_id, journey_id, journey_id, logged_date)
     )
 
     exercise_logs = cursor.fetchall()

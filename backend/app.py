@@ -1,12 +1,13 @@
 import json
 import os
+import re
 import sqlite3
 from datetime import date, time
 
 from flask import Flask, request, send_from_directory, g, make_response
 from auth import init_auth, issue_session, COOKIE_NAME, SESSION_SECONDS
 from database import get_db_connection
-from database import init_db, create_user, get_user_from_email, get_active_journey, start_new_journey, save_user_plan, get_latest_user_plan, save_weight_log, get_weight_history, get_weight_by_date, get_latest_weight, save_food_log, get_food_history, get_food_logs_by_date, update_food_log, delete_food_log, save_exercise_log, get_exercise_history, get_exercise_logs_by_date, update_exercise_log, delete_exercise_log, get_user_journeys, get_journey_for_user, get_plans_by_journey, get_food_entry, update_food_photo_path
+from database import init_db, create_user, get_user_from_email, get_active_journey, start_new_journey, save_user_plan, get_latest_user_plan, save_weight_log, get_weight_history, get_weight_by_date, get_latest_weight, get_weight_entry, delete_weight_log, save_food_log, get_food_history, get_food_logs_by_date, update_food_log, delete_food_log, save_exercise_log, get_exercise_history, get_exercise_logs_by_date, update_exercise_log, delete_exercise_log, get_user_journeys, get_journey_for_user, get_plans_by_journey, get_food_entry, update_food_photo_path, get_daily_activity
 from planner import generate_plan
 from werkzeug.exceptions import RequestEntityTooLarge
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -129,6 +130,24 @@ def test():
     return {"message": "Backend is working"}
 
 
+EMAIL_PATTERN = re.compile(r"^[^@\s]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}$")
+# Gmail has no regional domains, so anything close to it is a typo.
+GMAIL_TYPO_NAMES = {"gmail", "gmial", "gamil", "gmal", "gmai", "gmaill", "gnail", "gmaul"}
+MIN_PASSWORD_LENGTH = 8
+
+
+def get_email_error(email):
+    if len(email) > 254 or not EMAIL_PATTERN.match(email):
+        return "Enter a valid email address, for example name@gmail.com"
+
+    local_part, domain = email.rsplit("@", 1)
+
+    if domain.split(".")[0] in GMAIL_TYPO_NAMES and domain not in ("gmail.com", "googlemail.com"):
+        return f"Did you mean {local_part}@gmail.com?"
+
+    return None
+
+
 @app.route("/api/register", methods=["POST"])
 def register():
     data = request.get_json(silent=True)
@@ -143,6 +162,35 @@ def register():
         return {
             "success": False,
             "message": "Username, email, and password are required"
+        }, 400
+
+    username = username.strip()
+    email = email.strip().lower()
+
+    if len(username) > 30:
+        return {
+            "success": False,
+            "message": "Username must be 30 characters or fewer"
+        }, 400
+
+    email_error = get_email_error(email)
+
+    if email_error:
+        return {
+            "success": False,
+            "message": email_error
+        }, 400
+
+    if len(password) < MIN_PASSWORD_LENGTH:
+        return {
+            "success": False,
+            "message": f"Password must be at least {MIN_PASSWORD_LENGTH} characters"
+        }, 400
+
+    if get_user_from_email(email) is not None:
+        return {
+            "success": False,
+            "message": "Email already registered"
         }, 400
 
     password_hash = generate_password_hash(password)
@@ -332,6 +380,17 @@ def save_plan():
     input_data = data.get("input_data")
     plan_result = data.get("plan_result")
     mode = data.get("mode", "update")
+    start_date = data.get("start_date")
+
+    if start_date is not None:
+        try:
+            if date.fromisoformat(start_date).isoformat() != start_date:
+                raise ValueError
+        except (TypeError, ValueError):
+            return {
+                "success": False,
+                "message": "Start date must use YYYY-MM-DD format"
+            }, 400
 
     if mode not in ("update", "new"):
         return {
@@ -401,7 +460,8 @@ def save_plan():
                 input_data["current_weight_kg"],
                 input_data["target_weight_kg"],
                 input_data,
-                plan_result
+                plan_result,
+                start_date
             )
             journey_id = result["journey"]["id"]
             plan_id = result["plan_id"]
@@ -510,6 +570,55 @@ def journey_weight_history(user_id, journey_id):
     }
 
 
+MAX_ACTIVITY_DAYS = 400
+
+
+@app.route("/api/activity/<int:user_id>", methods=["GET"])
+def daily_activity(user_id):
+    dates = {}
+
+    for name in ("start", "end"):
+        value = request.args.get(name, "")
+
+        try:
+            dates[name] = date.fromisoformat(value)
+        except ValueError:
+            dates[name] = None
+
+        if dates[name] is None or dates[name].isoformat() != value:
+            return {
+                "success": False,
+                "message": "Start and end must be dates in YYYY-MM-DD format"
+            }, 400
+
+    span = (dates["end"] - dates["start"]).days
+
+    if span < 0 or span >= MAX_ACTIVITY_DAYS:
+        return {
+            "success": False,
+            "message": f"End must be on or after start, within {MAX_ACTIVITY_DAYS} days"
+        }, 400
+
+    days = get_daily_activity(user_id, dates["start"].isoformat(), dates["end"].isoformat())
+
+    return {
+        "success": True,
+        "message": "Daily activity fetched successfully",
+        "days": [
+            {
+                "date": row["logged_date"],
+                "calories_eaten": row["calories_eaten"],
+                "calories_burned": row["calories_burned"],
+                "active_minutes": row["active_minutes"],
+                "food_entries": row["food_entries"],
+                "exercise_entries": row["exercise_entries"],
+                "weight_logged": bool(row["weight_logged"]),
+            }
+            for row in days
+        ]
+    }
+
+
 @app.route("/api/weights", methods=["POST"])
 def create_weight_log():
     data = request.get_json()
@@ -523,6 +632,16 @@ def create_weight_log():
     user_id = data.get("user_id")
     weight_kg = data.get("weight_kg")
     logged_date = data.get("logged_date")
+    note = data.get("note")
+
+    if note is not None and not isinstance(note, str):
+        return {
+            "success": False,
+            "message": "Note must be text"
+        }, 400
+
+    note = note.strip()[:200] if note else None
+    note = note or None
 
     if user_id in ("", None) or weight_kg in ("", None) or not logged_date:
         return {
@@ -568,7 +687,7 @@ def create_weight_log():
         }, 404
 
     try:
-        save_weight_log(user_id, journey["id"], weight_kg, logged_date)
+        save_weight_log(user_id, journey["id"], weight_kg, logged_date, note)
     except sqlite3.IntegrityError:
         return {
             "success": False,
@@ -582,8 +701,56 @@ def create_weight_log():
             "user_id": user_id,
             "journey_id": journey["id"],
             "weight_kg": weight_kg,
-            "logged_date": logged_date
+            "logged_date": logged_date,
+            "note": note
         }
+    }
+
+@app.route("/api/weights/<int:weight_id>", methods=["DELETE"])
+def delete_weight_entry(weight_id):
+    data = request.get_json(silent=True)
+
+    if data is None:
+        return {
+            "success": False,
+            "message": "Request body must be JSON"
+        }, 400
+
+    try:
+        user_id = int(data.get("user_id"))
+    except (TypeError, ValueError):
+        return {
+            "success": False,
+            "message": "User id must be a number"
+        }, 400
+
+    journey = get_active_journey(user_id)
+
+    if journey is None:
+        return {
+            "success": False,
+            "message": "Active journey not found. Create a plan first"
+        }, 404
+
+    weight = get_weight_entry(weight_id, user_id, journey["id"])
+
+    if weight is None:
+        return {
+            "success": False,
+            "message": "Weight entry not found"
+        }, 404
+
+    if weight["is_initial"]:
+        return {
+            "success": False,
+            "message": "The starting weight of a journey cannot be deleted"
+        }, 400
+
+    delete_weight_log(weight_id, user_id, journey["id"])
+
+    return {
+        "success": True,
+        "message": "Weight entry deleted successfully"
     }
 
 @app.route("/api/weights/history/<int:user_id>", methods=["GET"])
@@ -652,15 +819,21 @@ def weight_by_date(user_id):
             "message": "Date must use YYYY-MM-DD format"
         }, 400
 
-    journey = get_active_journey(user_id)
+    # The calendar views every journey; logging pages stay on the active one.
+    if request.args.get("all_journeys") == "1":
+        journey_id = None
+    else:
+        journey = get_active_journey(user_id)
 
-    if journey is None:
-        return {
-            "success": False,
-            "message": "Active journey not found. Create a plan first"
-        }, 404
+        if journey is None:
+            return {
+                "success": False,
+                "message": "Active journey not found. Create a plan first"
+            }, 404
 
-    weight = get_weight_by_date(user_id, journey["id"], logged_date)
+        journey_id = journey["id"]
+
+    weight = get_weight_by_date(user_id, journey_id, logged_date)
 
     if weight is None:
         return {
@@ -1072,15 +1245,21 @@ def foods_by_date(user_id):
             "message": "Date must use YYYY-MM-DD format"
         }, 400
 
-    journey = get_active_journey(user_id)
+    # The calendar views every journey; logging pages stay on the active one.
+    if request.args.get("all_journeys") == "1":
+        journey_id = None
+    else:
+        journey = get_active_journey(user_id)
 
-    if journey is None:
-        return {
-            "success": False,
-            "message": "Active journey not found. Create a plan first"
-        }, 404
+        if journey is None:
+            return {
+                "success": False,
+                "message": "Active journey not found. Create a plan first"
+            }, 404
 
-    food_logs = get_food_logs_by_date(user_id, journey["id"], logged_date)
+        journey_id = journey["id"]
+
+    food_logs = get_food_logs_by_date(user_id, journey_id, logged_date)
 
     total_calories = sum(row["calories"] for row in food_logs)
 
@@ -1266,6 +1445,7 @@ def delete_food_entry(food_id):
             "message": "Active journey not found. Create a plan first"
         }, 404
 
+    food = get_food_entry(food_id, user_id, journey["id"])
     deleted_rows = delete_food_log(food_id, user_id, journey["id"])
 
     if deleted_rows == 0:
@@ -1273,6 +1453,9 @@ def delete_food_entry(food_id):
             "success": False,
             "message": "Food entry not found"
         }, 404
+
+    if food is not None and food["photo_path"]:
+        (FOOD_PHOTO_FOLDER / Path(food["photo_path"]).name).unlink(missing_ok=True)
 
     return {
         "success": True,
@@ -1451,15 +1634,21 @@ def exercises_by_date(user_id):
             "message": "Date must use YYYY-MM-DD format"
         }, 400
 
-    journey = get_active_journey(user_id)
+    # The calendar views every journey; logging pages stay on the active one.
+    if request.args.get("all_journeys") == "1":
+        journey_id = None
+    else:
+        journey = get_active_journey(user_id)
 
-    if journey is None:
-        return {
-            "success": False,
-            "message": "Active journey not found. Create a plan first"
-        }, 404
+        if journey is None:
+            return {
+                "success": False,
+                "message": "Active journey not found. Create a plan first"
+            }, 404
 
-    exercise_logs = get_exercise_logs_by_date(user_id, journey["id"], logged_date)
+        journey_id = journey["id"]
+
+    exercise_logs = get_exercise_logs_by_date(user_id, journey_id, logged_date)
     total_duration = sum(row["duration_minutes"] for row in exercise_logs)
     total_calories = sum(row["calories_burned"] for row in exercise_logs)
 

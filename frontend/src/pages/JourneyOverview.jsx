@@ -1,10 +1,9 @@
 import { apiFetch, API_BASE_URL } from "../utils/api";
+import { parseServerTimestamp } from "../utils/dateUtils";
 import { useEffect, useMemo, useState } from "react";
 import { Link, Navigate, useNavigate, useParams } from "react-router-dom";
 import WeightLineChart from "../components/WeightLineChart";
 import { getWeightStats } from "../utils/weightUtils";
-
-
 
 function JourneyOverview() {
   const navigate = useNavigate();
@@ -12,7 +11,6 @@ function JourneyOverview() {
   const savedUser = localStorage.getItem("user");
   const user = savedUser ? JSON.parse(savedUser) : null;
   const userId = user?.id;
-  const localWeightStorageKey = userId ? `cutsmart_weight_entries_${userId}` : "";
   const [overview, setOverview] = useState({
     plans: [],
     weights: [],
@@ -75,32 +73,13 @@ function JourneyOverview() {
     () => [...overview.weights].sort((a, b) => a.logged_date.localeCompare(b.logged_date)),
     [overview.weights]
   );
-  const localWeightHistory = useMemo(
-    () => getStoredWeightEntries(localWeightStorageKey).sort((a, b) => a.logged_date.localeCompare(b.logged_date)),
-    [localWeightStorageKey]
-  );
-  const journeySnapshot = useMemo(
-    () => getStoredJourneySnapshot(userId, journeyId),
-    [journeyId, userId]
-  );
-  const snapshotWeights = useMemo(
-    () => [...(journeySnapshot?.weights || [])].sort((a, b) => a.logged_date.localeCompare(b.logged_date)),
-    [journeySnapshot]
-  );
-  const latestPlan = overview.plans[0] || journeySnapshot?.plan || null;
+  const latestPlan = overview.plans[0] || null;
   const journey = overview.journey;
   const status = journey?.status || "not available";
   const isArchivedJourney = status === "archived";
-  const chartWeights = isArchivedJourney
-    ? getArchivedWeightHistory(sortedWeights, snapshotWeights, localWeightHistory)
-    : sortedWeights;
-  const journeyFoods = isArchivedJourney && journeySnapshot?.foods?.length
-    ? journeySnapshot.foods
-    : overview.foods;
-  const journeyExercises = isArchivedJourney && journeySnapshot?.exercises?.length
-    ? journeySnapshot.exercises
-    : overview.exercises;
-  const weightStats = getWeightStats({ weights: chartWeights, plan: latestPlan, journey });
+  const journeyFoods = overview.foods;
+  const journeyExercises = overview.exercises;
+  const weightStats = getWeightStats({ weights: sortedWeights, plan: latestPlan, journey });
   const canShowProgress = Boolean(weightStats.startWeight && weightStats.latestWeight && weightStats.targetWeight);
   const title = latestPlan?.strategy ? `${formatLabel(latestPlan.strategy)} Strategy` : "Journey";
   const chartColors = isArchivedJourney
@@ -353,58 +332,6 @@ function JourneyEmptyState({ title, text, tone = "default" }) {
   );
 }
 
-function getStoredWeightEntries(storageKey) {
-  if (!storageKey) {
-    return [];
-  }
-
-  const rawEntries = localStorage.getItem(storageKey);
-
-  if (!rawEntries) {
-    return [];
-  }
-
-  try {
-    return JSON.parse(rawEntries);
-  } catch {
-    return [];
-  }
-}
-
-function getStoredJourneySnapshot(userId, journeyId) {
-  if (!userId || !journeyId) {
-    return null;
-  }
-
-  const rawSnapshot = localStorage.getItem(`cutsmart_journey_snapshot_${userId}_${journeyId}`);
-
-  if (!rawSnapshot) {
-    return null;
-  }
-
-  try {
-    return JSON.parse(rawSnapshot);
-  } catch {
-    return null;
-  }
-}
-
-function getArchivedWeightHistory(backendWeights, snapshotWeights, localWeights) {
-  if (snapshotWeights.length > 0) {
-    return snapshotWeights;
-  }
-
-  if (backendWeights.length > 1) {
-    return backendWeights;
-  }
-
-  if (localWeights.length > backendWeights.length) {
-    return localWeights;
-  }
-
-  return backendWeights;
-}
-
 function getJourneyInsight(canShowProgress, progress) {
   if (!canShowProgress) {
     return "Stay consistent and keep building healthy habits.";
@@ -470,7 +397,7 @@ function formatDate(value) {
     return "Not Available";
   }
 
-  return new Date(value).toLocaleDateString(undefined, {
+  return parseServerTimestamp(value).toLocaleDateString(undefined, {
     day: "numeric",
     month: "short",
     year: "numeric",

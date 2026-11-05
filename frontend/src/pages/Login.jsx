@@ -45,6 +45,7 @@ function Login() {
         })
       );
 
+      clearLegacyStorage();
       navigate("/dashboard");
     } catch {
       setMessage("Could not connect to the server.");
@@ -83,6 +84,7 @@ function Login() {
                 <span className="auth-input-icon" aria-hidden="true">✉</span>
                 <input
                   type="email"
+                  autoComplete="email"
                   value={email}
                   onChange={(event) => setEmail(event.target.value)}
                   placeholder="Email address"
@@ -97,6 +99,7 @@ function Login() {
                 <span className="auth-input-icon" aria-hidden="true">⌘</span>
                 <input
                   type={showPassword ? "text" : "password"}
+                  autoComplete="current-password"
                   value={password}
                   onChange={(event) => setPassword(event.target.value)}
                   placeholder="Password"
@@ -128,6 +131,22 @@ function Login() {
       </section>
     </main>
   );
+}
+
+// Older versions kept logs in browser storage; the server is now the only source of truth.
+const LEGACY_STORAGE_PREFIXES = [
+  "cutsmart_weight_entries_",
+  "cutsmart_food_log_",
+  "cutsmart_exercise_log_",
+  "cutsmart_calendar_",
+  "cutsmart_streak_",
+  "cutsmart_journey_snapshot_",
+];
+
+function clearLegacyStorage() {
+  Object.keys(localStorage)
+    .filter((key) => LEGACY_STORAGE_PREFIXES.some((prefix) => key.startsWith(prefix)))
+    .forEach((key) => localStorage.removeItem(key));
 }
 
 export default Login;
