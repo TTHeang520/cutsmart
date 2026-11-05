@@ -412,6 +412,22 @@ def validate_plan_input(data):
     return clean, None
 
 
+def plan_failure_message(plan_input, plan_option):
+    """Explain why generate_plan returned None for input that passed validation."""
+    if plan_option not in ("steady", "fastest_safe"):
+        return "Plan option must be steady or fastest_safe"
+
+    if plan_option == "fastest_safe":
+        return "A faster option is not available for this plan"
+
+    # Validated input only fails when there is no room for a safe calorie deficit.
+    return (
+        "Your estimated daily energy use is already close to CutSmart's minimum safe "
+        "intake, so it cannot create a safe calorie deficit for you. Try a more active "
+        "daily activity level, or speak to a health professional for advice."
+    )
+
+
 @app.route("/api/plan", methods=["POST"])
 def plan():
     data = request.get_json(silent=True)
@@ -423,12 +439,13 @@ def plan():
             "message": error
         }, 400
 
-    plan_result = generate_plan({**clean, "plan_option": data.get("plan_option", "steady")})
+    plan_option = data.get("plan_option", "steady")
+    plan_result = generate_plan({**clean, "plan_option": plan_option})
 
     if plan_result is None:
         return {
             "success": False,
-            "message": "Could not generate plan from the provided details"
+            "message": plan_failure_message(clean, plan_option)
         }, 400
 
     return {
@@ -496,7 +513,7 @@ def save_plan():
     if plan_result is None:
         return {
             "success": False,
-            "message": "Could not generate plan from the provided details"
+            "message": plan_failure_message(clean_input, plan_option)
         }, 400
 
     journey = get_active_journey(user_id)

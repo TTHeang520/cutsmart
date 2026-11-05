@@ -98,7 +98,8 @@ def calculate_recommended_timeline(current_weight_kg, target_weight_kg, daily_de
     recommended_timeline_days = total_deficit_needed / daily_deficit
     recommended_timeline_weeks = recommended_timeline_days / 7
 
-    return round(recommended_timeline_weeks)
+    # A very small goal still takes some time; never show a 0-week timeline.
+    return max(1, round(recommended_timeline_weeks))
 
 def calculate_deficit_from_timeline(current_weight_kg, target_weight_kg, desired_timeline_weeks):
     weight_to_lose_kg = current_weight_kg - target_weight_kg
