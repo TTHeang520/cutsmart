@@ -7,9 +7,10 @@ from datetime import date, time
 from flask import Flask, request, send_from_directory, g, make_response
 from auth import init_auth, issue_session, COOKIE_NAME, SESSION_SECONDS
 from database import get_db_connection
-from database import init_db, create_user, get_user_from_email, get_active_journey, start_new_journey, save_user_plan, get_latest_user_plan, save_weight_log, get_weight_history, get_weight_by_date, get_latest_weight, get_weight_entry, delete_weight_log, save_food_log, get_food_history, get_food_logs_by_date, update_food_log, delete_food_log, save_exercise_log, get_exercise_history, get_exercise_logs_by_date, update_exercise_log, delete_exercise_log, get_user_journeys, get_journey_for_user, get_plans_by_journey, get_food_entry, update_food_photo_path, get_daily_activity
+from database import init_db, create_user, get_user_from_email, get_active_journey, start_new_journey, save_user_plan, get_latest_user_plan, save_weight_log, get_weight_history, get_weight_by_date, get_latest_weight, get_weight_entry, update_weight_log, delete_weight_log, save_food_log, get_food_history, get_food_logs_by_date, update_food_log, delete_food_log, save_exercise_log, get_exercise_history, get_exercise_logs_by_date, update_exercise_log, delete_exercise_log, get_user_journeys, get_journey_for_user, get_plans_by_journey, get_food_entry, update_food_photo_path, get_daily_activity
 from planner import generate_plan
 from werkzeug.exceptions import RequestEntityTooLarge
+from werkzeug.middleware.proxy_fix import ProxyFix
 from werkzeug.security import generate_password_hash, check_password_hash
 from pathlib import Path
 from uuid import uuid4
@@ -18,6 +19,16 @@ from config import DATA_DIR, FRONTEND_DIR, PRODUCTION
 
 app = Flask(__name__)
 app.config["SESSION_COOKIE_SECURE"] = os.environ.get("CUTSMART_ENV") == "production"
+
+# Hosts such as PythonAnywhere run the app behind their own proxy. Without this,
+# every visitor appears to come from the proxy's address and shares one login
+# rate limit. Set CUTSMART_PROXY_HOPS only when such a proxy is really in front.
+_proxy_hops = os.environ.get("CUTSMART_PROXY_HOPS")
+if _proxy_hops:
+    hops = int(_proxy_hops)
+    if hops < 1:
+        raise RuntimeError("CUTSMART_PROXY_HOPS must be a positive whole number")
+    app.wsgi_app = ProxyFix(app.wsgi_app, x_for=hops, x_proto=hops)
 FOOD_PHOTO_FOLDER = (
     DATA_DIR
     / "uploads"
@@ -38,7 +49,8 @@ FOOD_PHOTO_FOLDER.mkdir(
     exist_ok=True
 )
 
-app.config["MAX_CONTENT_LENGTH"] = MAX_IMAGE_SIZE
+# Leave room for multipart form overhead; the photo itself is checked separately.
+app.config["MAX_CONTENT_LENGTH"] = MAX_IMAGE_SIZE + 1024 * 1024
 
 @app.errorhandler(RequestEntityTooLarge)
 def handle_large_upload(error):
@@ -128,6 +140,55 @@ def frontend_page(path):
 @app.route("/api/test")
 def test():
     return {"message": "Backend is working"}
+
+
+def clean_text(value, label, max_length, required=False):
+    """Return (stripped_text_or_None, error_message_or_None) for a free-text field."""
+    if value is None or (isinstance(value, str) and not value.strip()):
+        if required:
+            return None, f"{label} is required"
+        return None, None
+
+    if not isinstance(value, str):
+        return None, f"{label} must be text"
+
+    value = value.strip()
+
+    if len(value) > max_length:
+        return None, f"{label} must be {max_length} characters or fewer"
+
+    return value, None
+
+
+def clean_text_fields(data, fields):
+    """Clean (key, label, max_length, required) fields in place; return the first error."""
+    for key, label, max_length, required in fields:
+        data[key], error = clean_text(data.get(key), label, max_length, required)
+
+        if error:
+            return error
+
+    return None
+
+
+MAX_FOOD_CALORIES = 10000
+MAX_MACRO_GRAMS = 1000
+MAX_EXERCISE_MINUTES = 1440
+MAX_EXERCISE_CALORIES = 10000
+MIN_LOG_WEIGHT_KG = 20
+MAX_LOG_WEIGHT_KG = 500
+
+
+FOOD_TEXT_FIELDS = [
+    ("food_name", "Food name", 100, True),
+    ("notes", "Notes", 500, False),
+]
+
+EXERCISE_TEXT_FIELDS = [
+    ("exercise_name", "Exercise name", 100, True),
+    ("category", "Category", 40, False),
+    ("notes", "Notes", 500, False),
+]
 
 
 EMAIL_PATTERN = re.compile(r"^[^@\s]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}$")
@@ -257,107 +318,134 @@ def login():
     return response
 
 
-@app.route("/api/plan", methods=["POST"])
-def plan():
-    data = request.get_json()
+PLAN_REQUIRED_FIELDS = [
+    "age",
+    "gender",
+    "height_cm",
+    "current_weight_kg",
+    "target_weight_kg",
+    "daily_activity_level",
+    "strategy"
+]
 
-    if data is None:
-        return {
-            "success": False,
-            "message": "Request body must be JSON"
-        }, 400
+VALID_DAILY_ACTIVITY_LEVELS = [
+    "mostly_sitting",
+    "light_daily_movement",
+    "on_feet_often",
+    "physical_daily_routine"
+]
 
-    required_fields = [
-        "age",
-        "gender",
-        "height_cm",
-        "current_weight_kg",
-        "target_weight_kg",
-        "daily_activity_level",
-        "strategy"
-    ]
+# Inclusive (minimum, maximum, label) limits. The calorie formulas are for adults,
+# and values outside these ranges are almost always typing mistakes.
+PLAN_NUMBER_LIMITS = {
+    "age": (18, 100, "Age must be between 18 and 100 years"),
+    "height_cm": (100, 250, "Height must be between 100 and 250 cm"),
+    "current_weight_kg": (30, 350, "Current weight must be between 30 and 350 kg"),
+    "target_weight_kg": (30, 350, "Target weight must be between 30 and 350 kg"),
+    "desired_timeline_weeks": (1, 520, "Desired timeline must be between 1 and 520 weeks"),
+}
 
-    for field in required_fields:
+MIN_TARGET_BMI = 18.5
+
+
+def validate_plan_input(data):
+    """Return (clean_input, None) for valid plan details, or (None, error_message)."""
+    if not isinstance(data, dict):
+        return None, "Request body must be a JSON object"
+
+    for field in PLAN_REQUIRED_FIELDS:
         if field not in data or data[field] in ("", None):
-            return {
-                "success": False,
-                "message": "Age, gender, height, current weight, target weight, daily activity level, and strategy are required"
-            }, 400
+            return None, "Age, gender, height, current weight, target weight, daily activity level, and strategy are required"
 
     if data["gender"] not in ["male", "female"]:
-        return {
-            "success": False,
-            "message": "Invalid gender"
-        }, 400
+        return None, "Invalid gender"
 
-    valid_daily_activity_levels = [
-        "mostly_sitting",
-        "light_daily_movement",
-        "on_feet_often",
-        "physical_daily_routine"
-    ]
-
-    if data["daily_activity_level"] not in valid_daily_activity_levels:
-        return {
-            "success": False,
-            "message": "Invalid daily activity level"
-        }, 400
+    if data["daily_activity_level"] not in VALID_DAILY_ACTIVITY_LEVELS:
+        return None, "Invalid daily activity level"
 
     if data["strategy"] not in ["diet", "exercise", "balanced"]:
-        return {
-            "success": False,
-            "message": "Invalid strategy"
-        }, 400
+        return None, "Invalid strategy"
 
-    number_fields = [
-        "age",
-        "height_cm",
-        "current_weight_kg",
-        "target_weight_kg"
-    ]
+    clean = {
+        "gender": data["gender"],
+        "daily_activity_level": data["daily_activity_level"],
+        "strategy": data["strategy"],
+        "desired_timeline_weeks": None,
+    }
 
-    if "desired_timeline_weeks" in data and data["desired_timeline_weeks"] is not None:
+    number_fields = ["age", "height_cm", "current_weight_kg", "target_weight_kg"]
+
+    if data.get("desired_timeline_weeks") not in ("", None):
         number_fields.append("desired_timeline_weeks")
 
-    try:
-        for field in number_fields:
-            data[field] = float(data[field])
-    except (TypeError, ValueError):
+    for field in number_fields:
+        value = data[field]
+
+        # bool is a subclass of int, so reject it explicitly.
+        if isinstance(value, bool):
+            return None, "Age, height, current weight, target weight, and desired timeline must be numbers"
+
+        try:
+            number = float(value)
+        except (TypeError, ValueError):
+            return None, "Age, height, current weight, target weight, and desired timeline must be numbers"
+
+        minimum, maximum, message = PLAN_NUMBER_LIMITS[field]
+
+        # NaN fails both comparisons, so test the valid range rather than the invalid one.
+        if not minimum <= number <= maximum:
+            return None, message
+
+        clean[field] = number
+
+    if clean["target_weight_kg"] >= clean["current_weight_kg"]:
+        return None, "Target weight must be lower than current weight for a weight-loss plan"
+
+    height_m = clean["height_cm"] / 100
+    if clean["target_weight_kg"] / (height_m * height_m) < MIN_TARGET_BMI:
+        lowest_target = MIN_TARGET_BMI * height_m * height_m
+        return None, (
+            "Target weight would be underweight for your height. "
+            f"Choose a target of at least {lowest_target:.1f} kg"
+        )
+
+    return clean, None
+
+
+def plan_failure_message(plan_input, plan_option):
+    """Explain why generate_plan returned None for input that passed validation."""
+    if plan_option not in ("steady", "fastest_safe"):
+        return "Plan option must be steady or fastest_safe"
+
+    if plan_option == "fastest_safe":
+        return "A faster option is not available for this plan"
+
+    # Validated input only fails when there is no room for a safe calorie deficit.
+    return (
+        "Your estimated daily energy use is already close to CutSmart's minimum safe "
+        "intake, so it cannot create a safe calorie deficit for you. Try a more active "
+        "daily activity level, or speak to a health professional for advice."
+    )
+
+
+@app.route("/api/plan", methods=["POST"])
+def plan():
+    data = request.get_json(silent=True)
+    clean, error = validate_plan_input(data)
+
+    if error:
         return {
             "success": False,
-            "message": "Age, height, current weight, target weight, and desired timeline must be numbers"
+            "message": error
         }, 400
 
-    if (
-        data["age"] <= 0
-        or data["height_cm"] <= 0
-        or data["current_weight_kg"] <= 0
-        or data["target_weight_kg"] <= 0
-    ):
-        return {
-            "success": False,
-            "message": "Age, height, current weight, and target weight must be positive numbers"
-        }, 400
-
-    if data["target_weight_kg"] >= data["current_weight_kg"]:
-        return {
-            "success": False,
-            "message": "Target weight must be lower than current weight for a weight-loss plan"
-        }, 400
-
-    if "desired_timeline_weeks" in data and data["desired_timeline_weeks"] is not None:
-        if data["desired_timeline_weeks"] <= 0:
-            return {
-                "success": False,
-                "message": "Desired timeline must be a positive number"
-            }, 400
-
-    plan_result = generate_plan(data)
+    plan_option = data.get("plan_option", "steady")
+    plan_result = generate_plan({**clean, "plan_option": plan_option})
 
     if plan_result is None:
         return {
             "success": False,
-            "message": "Could not generate plan from the provided details"
+            "message": plan_failure_message(clean, plan_option)
         }, 400
 
     return {
@@ -368,17 +456,17 @@ def plan():
 
 @app.route("/api/plans/save", methods=["POST"])
 def save_plan():
-    data = request.get_json()
+    data = request.get_json(silent=True)
 
-    if data is None:
+    if not isinstance(data, dict):
         return {
             "success": False,
-            "message": "Request body must be JSON"
+            "message": "Request body must be a JSON object"
         }, 400
 
     user_id = data.get("user_id")
     input_data = data.get("input_data")
-    plan_result = data.get("plan_result")
+    client_plan = data.get("plan_result")
     mode = data.get("mode", "update")
     start_date = data.get("start_date")
 
@@ -398,55 +486,35 @@ def save_plan():
             "message": "Mode must be update or new"
         }, 400
 
-    if not user_id or not input_data or not plan_result:
+    if not user_id or not input_data:
         return {
             "success": False,
-            "message": "User id, input data, and plan result are required"
+            "message": "User id and input data are required"
         }, 400
 
-    required_input_fields = [
-        "age",
-        "gender",
-        "height_cm",
-        "current_weight_kg",
-        "target_weight_kg",
-        "daily_activity_level",
-        "strategy"
-    ]
+    clean_input, error = validate_plan_input(input_data)
 
-    required_plan_fields = [
-        "current_bmi",
-        "current_bmi_category",
-        "target_bmi",
-        "target_bmi_category",
-        "bmr",
-        "activity_multiplier",
-        "maintenance_calories",
-        "target_calories",
-        "daily_deficit",
-        "diet_deficit",
-        "exercise_deficit",
-        "estimated_weight_loss_kg_per_week",
-        "recommended_timeline_weeks",
-        "timeline_status",
-        "protein_g",
-        "carbs_g",
-        "fat_g"
-    ]
+    if error:
+        return {
+            "success": False,
+            "message": error
+        }, 400
 
-    for field in required_input_fields:
-        if field not in input_data or input_data[field] in ("", None):
-            return {
-                "success": False,
-                "message": "Input data is missing required fields"
-            }, 400
+    # Never store numbers calculated by the browser: recalculate the plan here.
+    # The client only chooses between the steady and faster pace.
+    plan_option = data.get("plan_option")
 
-    for field in required_plan_fields:
-        if field not in plan_result or plan_result[field] in ("", None):
-            return {
-                "success": False,
-                "message": "Plan result is missing required fields"
-            }, 400
+    if plan_option is None:
+        is_faster = isinstance(client_plan, dict) and client_plan.get("timeline_status") == "fastest_safe"
+        plan_option = "fastest_safe" if is_faster else "steady"
+
+    plan_result = generate_plan({**clean_input, "plan_option": plan_option})
+
+    if plan_result is None:
+        return {
+            "success": False,
+            "message": plan_failure_message(clean_input, plan_option)
+        }, 400
 
     journey = get_active_journey(user_id)
 
@@ -457,9 +525,9 @@ def save_plan():
         if mode == "new":
             result = start_new_journey(
                 user_id,
-                input_data["current_weight_kg"],
-                input_data["target_weight_kg"],
-                input_data,
+                clean_input["current_weight_kg"],
+                clean_input["target_weight_kg"],
+                clean_input,
                 plan_result,
                 start_date
             )
@@ -470,7 +538,7 @@ def save_plan():
             plan_id = save_user_plan(
                 user_id,
                 journey_id,
-                input_data,
+                clean_input,
                 plan_result
             )
     except sqlite3.IntegrityError:
@@ -484,7 +552,8 @@ def save_plan():
         "message": "Plan saved successfully",
         "mode": mode,
         "journey_id": journey_id,
-        "plan_id": plan_id
+        "plan_id": plan_id,
+        "plan": {**clean_input, **plan_result}
     }
 
 
@@ -526,6 +595,14 @@ def journey_history(user_id):
     methods=["GET"]
 )
 def plans_by_journey(user_id, journey_id):
+    journey = get_journey_for_user(user_id, journey_id)
+
+    if journey is None:
+        return {
+            "success": False,
+            "message": "Journey not found"
+        }, 404
+
     plans = get_plans_by_journey(user_id, journey_id)
 
     plan_list = []
@@ -543,6 +620,7 @@ def plans_by_journey(user_id, journey_id):
     return {
         "success": True,
         "message": "Journey plans fetched successfully",
+        "journey": dict(journey),
         "plans": plan_list
     }
 
@@ -619,63 +697,80 @@ def daily_activity(user_id):
     }
 
 
-@app.route("/api/weights", methods=["POST"])
-def create_weight_log():
-    data = request.get_json()
+def parse_weight_entry(data):
+    """Return (weight_kg, logged_date, note, error_message) for a weight request body."""
+    note, error = clean_text(data.get("note"), "Note", 200)
 
-    if data is None:
-        return {
-            "success": False,
-            "message": "Request body must be JSON"
-        }, 400
-    
-    user_id = data.get("user_id")
+    if error:
+        return None, None, None, error
+
     weight_kg = data.get("weight_kg")
     logged_date = data.get("logged_date")
-    note = data.get("note")
 
-    if note is not None and not isinstance(note, str):
-        return {
-            "success": False,
-            "message": "Note must be text"
-        }, 400
+    if weight_kg in ("", None) or not logged_date:
+        return None, None, None, "Weight and logged date are required"
 
-    note = note.strip()[:200] if note else None
-    note = note or None
-
-    if user_id in ("", None) or weight_kg in ("", None) or not logged_date:
-        return {
-            "success": False,
-            "message": "User id, weight, and logged date are required"
-        }, 400
+    if isinstance(weight_kg, bool):
+        return None, None, None, "Weight must be a number"
 
     try:
-        user_id = int(user_id)
         weight_kg = float(weight_kg)
     except (TypeError, ValueError):
-        return {
-            "success": False,
-            "message": "User id and weight must be numbers"
-        }, 400
+        return None, None, None, "Weight must be a number"
 
-    if user_id <= 0 or weight_kg <= 0:
-        return {
-            "success": False,
-            "message": "User id and weight must be positive"
-        }, 400
+    if not MIN_LOG_WEIGHT_KG <= weight_kg <= MAX_LOG_WEIGHT_KG:
+        return None, None, None, f"Weight must be between {MIN_LOG_WEIGHT_KG} and {MAX_LOG_WEIGHT_KG} kg"
 
     try:
         parsed_date = date.fromisoformat(logged_date)
     except (TypeError, ValueError):
-        return {
-            "success": False,
-            "message": "Logged date must be a real date in YYYY-MM-DD format"
-        }, 400
+        return None, None, None, "Logged date must be a real date in YYYY-MM-DD format"
 
     if parsed_date.isoformat() != logged_date:
+        return None, None, None, "Logged date must use YYYY-MM-DD format"
+
+    return weight_kg, logged_date, note, None
+
+
+def parse_user_id(data):
+    """Return a positive integer user id from a JSON body, or None."""
+    value = data.get("user_id")
+
+    if isinstance(value, bool):
+        return None
+
+    try:
+        user_id = int(value)
+    except (TypeError, ValueError):
+        return None
+
+    return user_id if user_id > 0 else None
+
+
+@app.route("/api/weights", methods=["POST"])
+def create_weight_log():
+    data = request.get_json(silent=True)
+
+    if not isinstance(data, dict):
         return {
             "success": False,
-            "message": "Logged date must use YYYY-MM-DD format"
+            "message": "Request body must be a JSON object"
+        }, 400
+
+    user_id = parse_user_id(data)
+
+    if user_id is None:
+        return {
+            "success": False,
+            "message": "User id must be a positive number"
+        }, 400
+
+    weight_kg, logged_date, note, error = parse_weight_entry(data)
+
+    if error:
+        return {
+            "success": False,
+            "message": error
         }, 400
 
     journey = get_active_journey(user_id)
@@ -694,10 +789,13 @@ def create_weight_log():
             "message": "User not found"
         }, 404
 
+    # Saving is an upsert by date, so read back the regular entry to return its id.
+    saved = get_weight_by_date(user_id, journey["id"], logged_date)
+
     return {
         "success": True,
         "message": "Weight recorded successfully",
-        "weight": {
+        "weight": dict(saved) if saved is not None else {
             "user_id": user_id,
             "journey_id": journey["id"],
             "weight_kg": weight_kg,
@@ -706,14 +804,81 @@ def create_weight_log():
         }
     }
 
+
+@app.route("/api/weights/<int:weight_id>", methods=["PUT"])
+def update_weight_entry(weight_id):
+    data = request.get_json(silent=True)
+
+    if not isinstance(data, dict):
+        return {
+            "success": False,
+            "message": "Request body must be a JSON object"
+        }, 400
+
+    user_id = parse_user_id(data)
+
+    if user_id is None:
+        return {
+            "success": False,
+            "message": "User id must be a positive number"
+        }, 400
+
+    weight_kg, logged_date, note, error = parse_weight_entry(data)
+
+    if error:
+        return {
+            "success": False,
+            "message": error
+        }, 400
+
+    journey = get_active_journey(user_id)
+
+    if journey is None:
+        return {
+            "success": False,
+            "message": "Active journey not found. Create a plan first"
+        }, 404
+
+    weight = get_weight_entry(weight_id, user_id, journey["id"])
+
+    if weight is None:
+        return {
+            "success": False,
+            "message": "Weight entry not found"
+        }, 404
+
+    # The starting weight marks the day the journey began, so only its value and note change.
+    if weight["is_initial"] and logged_date != weight["logged_date"]:
+        return {
+            "success": False,
+            "message": "The starting weight's date cannot be changed"
+        }, 400
+
+    try:
+        update_weight_log(weight_id, user_id, journey["id"], weight_kg, logged_date, note)
+    except sqlite3.IntegrityError:
+        return {
+            "success": False,
+            "message": "You already have a weight entry on that date. Edit that entry instead"
+        }, 409
+
+    updated = get_weight_entry(weight_id, user_id, journey["id"])
+
+    return {
+        "success": True,
+        "message": "Weight entry updated successfully",
+        "weight": dict(updated)
+    }
+
+
 @app.route("/api/weights/<int:weight_id>", methods=["DELETE"])
 def delete_weight_entry(weight_id):
     data = request.get_json(silent=True)
 
-    if data is None:
+    if not isinstance(data, dict):
         return {
             "success": False,
-            "message": "Request body must be JSON"
+            "message": "Request body must be a JSON object"
         }, 400
 
     try:
@@ -768,6 +933,8 @@ def weight_history(user_id):
     return {
         "success": True,
         "message": "Weight history fetched successfully",
+        # The journey carries the baseline and target used for progress figures.
+        "journey": dict(journey),
         "history": [dict(row) for row in history]
     }
 
@@ -879,6 +1046,16 @@ def upload_food_photo(food_id):
             "message": "Photo must be a JPG, JPEG, PNG, or WebP image"
         }, 400
 
+    photo.stream.seek(0, os.SEEK_END)
+    photo_size = photo.stream.tell()
+    photo.stream.seek(0)
+
+    if photo_size > MAX_IMAGE_SIZE:
+        return {
+            "success": False,
+            "message": "Photo must not exceed 5 MB"
+        }, 413
+
     journey = get_active_journey(user_id)
 
     if journey is None:
@@ -948,10 +1125,10 @@ def upload_food_photo(food_id):
 def delete_food_photo(food_id):
     data = request.get_json(silent=True)
 
-    if data is None:
+    if not isinstance(data, dict):
         return {
             "success": False,
-            "message": "Request body must be JSON"
+            "message": "Request body must be a JSON object"
         }, 400
 
     user_id = data.get("user_id")
@@ -1041,12 +1218,12 @@ def serve_uploaded_photo(photo_path):
 
 @app.route("/api/foods", methods=["POST"])
 def create_food_log():
-    data = request.get_json()
+    data = request.get_json(silent=True)
 
-    if data is None:
+    if not isinstance(data, dict):
         return {
             "success": False,
-            "message": "Request body must be JSON"
+            "message": "Request body must be a JSON object"
         }, 400
 
     required_fields = [
@@ -1065,6 +1242,14 @@ def create_food_log():
                 "message": "User id, food name, calories, meal type, date, and time are required"
             }, 400
 
+    text_error = clean_text_fields(data, FOOD_TEXT_FIELDS)
+
+    if text_error:
+        return {
+            "success": False,
+            "message": text_error
+        }, 400
+
     try:
         user_id = int(data["user_id"])
         data["calories"] = float(data["calories"])
@@ -1078,6 +1263,13 @@ def create_food_log():
         return {
             "success": False,
             "message": "User id and calories must be positive"
+        }, 400
+
+    # "not <=" also rejects NaN and infinity, which JSON cannot represent.
+    if not data["calories"] <= MAX_FOOD_CALORIES:
+        return {
+            "success": False,
+            "message": f"Calories must be {MAX_FOOD_CALORIES:,} kcal or less"
         }, 400
 
     valid_meal_types = [
@@ -1130,10 +1322,10 @@ def create_food_log():
             else:
                 data[field] = float(data[field])
 
-                if data[field] < 0:
+                if not 0 <= data[field] <= MAX_MACRO_GRAMS:
                     return {
                         "success": False,
-                        "message": "Macro values cannot be negative"
+                        "message": f"Macro values must be between 0 and {MAX_MACRO_GRAMS} g"
                     }, 400
     except (TypeError, ValueError):
         return {
@@ -1276,12 +1468,12 @@ def foods_by_date(user_id):
 
 @app.route("/api/foods/<int:food_id>", methods=["PUT"])
 def update_food_entry(food_id):
-    data = request.get_json()
+    data = request.get_json(silent=True)
 
-    if data is None:
+    if not isinstance(data, dict):
         return {
             "success": False,
-            "message": "Request body must be JSON"
+            "message": "Request body must be a JSON object"
         }, 400
 
     required_fields = [
@@ -1300,6 +1492,14 @@ def update_food_entry(food_id):
                 "message": "User id, food name, calories, meal type, date, and time are required"
             }, 400
 
+    text_error = clean_text_fields(data, FOOD_TEXT_FIELDS)
+
+    if text_error:
+        return {
+            "success": False,
+            "message": text_error
+        }, 400
+
     try:
         user_id = int(data["user_id"])
         data["calories"] = float(data["calories"])
@@ -1313,6 +1513,13 @@ def update_food_entry(food_id):
         return {
             "success": False,
             "message": "User id and calories must be positive"
+        }, 400
+
+    # "not <=" also rejects NaN and infinity, which JSON cannot represent.
+    if not data["calories"] <= MAX_FOOD_CALORIES:
+        return {
+            "success": False,
+            "message": f"Calories must be {MAX_FOOD_CALORIES:,} kcal or less"
         }, 400
 
     valid_meal_types = ["breakfast", "lunch", "dinner", "snack"]
@@ -1360,10 +1567,10 @@ def update_food_entry(food_id):
             else:
                 data[field] = float(data[field])
 
-                if data[field] < 0:
+                if not 0 <= data[field] <= MAX_MACRO_GRAMS:
                     return {
                         "success": False,
-                        "message": "Macro values cannot be negative"
+                        "message": f"Macro values must be between 0 and {MAX_MACRO_GRAMS} g"
                     }, 400
     except (TypeError, ValueError):
         return {
@@ -1387,32 +1594,22 @@ def update_food_entry(food_id):
             "message": "Food entry not found"
         }, 404
 
+    updated_food = get_food_entry(food_id, user_id, journey["id"])
+
     return {
         "success": True,
         "message": "Food entry updated successfully",
-        "food": {
-            "id": food_id,
-            "user_id": user_id,
-            "food_name": data["food_name"],
-            "calories": data["calories"],
-            "meal_type": data["meal_type"],
-            "logged_date": data["logged_date"],
-            "logged_time": data["logged_time"],
-            "protein_g": data.get("protein_g"),
-            "carbs_g": data.get("carbs_g"),
-            "fat_g": data.get("fat_g"),
-            "notes": data.get("notes")
-        }
+        "food": dict(updated_food)
     }
 
 @app.route("/api/foods/<int:food_id>", methods=["DELETE"])
 def delete_food_entry(food_id):
-    data = request.get_json()
+    data = request.get_json(silent=True)
 
-    if data is None:
+    if not isinstance(data, dict):
         return {
             "success": False,
-            "message": "Request body must be JSON"
+            "message": "Request body must be a JSON object"
         }, 400
 
     user_id = data.get("user_id")
@@ -1487,12 +1684,12 @@ def journey_exercise_history(user_id, journey_id):
 
 @app.route("/api/exercises", methods=["POST"])
 def create_exercise_log():
-    data = request.get_json()
+    data = request.get_json(silent=True)
 
-    if data is None:
+    if not isinstance(data, dict):
         return {
             "success": False,
-            "message": "Request body must be JSON"
+            "message": "Request body must be a JSON object"
         }, 400
 
     required_fields = [
@@ -1510,6 +1707,14 @@ def create_exercise_log():
                 "success": False,
                 "message": "User id, exercise name, duration, calories burned, date, and time are required"
             }, 400
+
+    text_error = clean_text_fields(data, EXERCISE_TEXT_FIELDS)
+
+    if text_error:
+        return {
+            "success": False,
+            "message": text_error
+        }, 400
 
     try:
         user_id = int(data["user_id"])
@@ -1529,6 +1734,18 @@ def create_exercise_log():
         return {
             "success": False,
             "message": "User id, duration, and calories burned must be positive"
+        }, 400
+
+    if not data["duration_minutes"] <= MAX_EXERCISE_MINUTES:
+        return {
+            "success": False,
+            "message": f"Duration must be {MAX_EXERCISE_MINUTES} minutes or less"
+        }, 400
+
+    if not data["calories_burned"] <= MAX_EXERCISE_CALORIES:
+        return {
+            "success": False,
+            "message": f"Calories burned must be {MAX_EXERCISE_CALORIES:,} kcal or less"
         }, 400
 
     try:
@@ -1666,12 +1883,12 @@ def exercises_by_date(user_id):
 
 @app.route("/api/exercises/<int:exercise_id>", methods=["PUT"])
 def update_exercise_entry(exercise_id):
-    data = request.get_json()
+    data = request.get_json(silent=True)
 
-    if data is None:
+    if not isinstance(data, dict):
         return {
             "success": False,
-            "message": "Request body must be JSON"
+            "message": "Request body must be a JSON object"
         }, 400
 
     required_fields = [
@@ -1689,6 +1906,14 @@ def update_exercise_entry(exercise_id):
                 "success": False,
                 "message": "User id, exercise name, duration, calories burned, date, and time are required"
             }, 400
+
+    text_error = clean_text_fields(data, EXERCISE_TEXT_FIELDS)
+
+    if text_error:
+        return {
+            "success": False,
+            "message": text_error
+        }, 400
 
     try:
         user_id = int(data["user_id"])
@@ -1708,6 +1933,18 @@ def update_exercise_entry(exercise_id):
         return {
             "success": False,
             "message": "User id, duration, and calories burned must be positive"
+        }, 400
+
+    if not data["duration_minutes"] <= MAX_EXERCISE_MINUTES:
+        return {
+            "success": False,
+            "message": f"Duration must be {MAX_EXERCISE_MINUTES} minutes or less"
+        }, 400
+
+    if not data["calories_burned"] <= MAX_EXERCISE_CALORIES:
+        return {
+            "success": False,
+            "message": f"Calories burned must be {MAX_EXERCISE_CALORIES:,} kcal or less"
         }, 400
 
     try:
@@ -1777,12 +2014,12 @@ def update_exercise_entry(exercise_id):
 
 @app.route("/api/exercises/<int:exercise_id>", methods=["DELETE"])
 def delete_exercise_entry(exercise_id):
-    data = request.get_json()
+    data = request.get_json(silent=True)
 
-    if data is None:
+    if not isinstance(data, dict):
         return {
             "success": False,
-            "message": "Request body must be JSON"
+            "message": "Request body must be a JSON object"
         }, 400
 
     user_id = data.get("user_id")
