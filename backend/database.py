@@ -5,7 +5,8 @@ from config import DATA_DIR
 DATABASE_NAME = DATA_DIR / "cutsmart_database"
 
 def get_db_connection():
-    connection = sqlite3.connect(DATABASE_NAME)
+    # Wait for a short write by another request instead of failing with "database is locked".
+    connection = sqlite3.connect(DATABASE_NAME, timeout=10)
     connection.row_factory = sqlite3.Row
     connection.execute("PRAGMA foreign_keys = ON")
     return connection
@@ -261,7 +262,7 @@ def init_db():
                     created_at,
                     updated_at
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     row["id"],
@@ -324,19 +325,22 @@ def init_db():
         WHERE is_initial = 0
     """)
 
+    # The journey's initial weight log is the baseline the user can correct,
+    # so keep plan_journeys.initial_weight_kg in step with it.
     cursor.execute("""
         UPDATE plan_journeys
         SET initial_weight_kg = (
-            SELECT user_plans.current_weight_kg
-            FROM user_plans
-            WHERE user_plans.journey_id = plan_journeys.id
-            ORDER BY created_at ASC, id ASC
+            SELECT weight_logs.weight_kg
+            FROM weight_logs
+            WHERE weight_logs.journey_id = plan_journeys.id
+                AND weight_logs.is_initial = 1
             LIMIT 1
         )
         WHERE EXISTS (
             SELECT 1
-            FROM user_plans
-            WHERE user_plans.journey_id = plan_journeys.id
+            FROM weight_logs
+            WHERE weight_logs.journey_id = plan_journeys.id
+                AND weight_logs.is_initial = 1
         )
     """)
 
@@ -882,6 +886,47 @@ def get_weight_entry(weight_id, user_id, journey_id):
     connection.close()
 
     return weight
+
+def update_weight_log(weight_id, user_id, journey_id, weight_kg, logged_date, note):
+    """Edit one weight entry. Editing the initial entry also moves the journey baseline."""
+    connection = get_db_connection()
+    cursor = connection.cursor()
+
+    try:
+        cursor.execute(
+            """
+            UPDATE weight_logs
+            SET
+                weight_kg = ?,
+                logged_date = ?,
+                note = ?,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = ? AND user_id = ? AND journey_id = ?
+            """,
+            (weight_kg, logged_date, note, weight_id, user_id, journey_id)
+        )
+        updated_rows = cursor.rowcount
+
+        cursor.execute(
+            """
+            UPDATE plan_journeys
+            SET initial_weight_kg = ?
+            WHERE id = ? AND user_id = ? AND EXISTS (
+                SELECT 1 FROM weight_logs
+                WHERE id = ? AND journey_id = plan_journeys.id AND is_initial = 1
+            )
+            """,
+            (weight_kg, journey_id, user_id, weight_id)
+        )
+
+        connection.commit()
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
+
+    return updated_rows
 
 def delete_weight_log(weight_id, user_id, journey_id):
     connection = get_db_connection()
