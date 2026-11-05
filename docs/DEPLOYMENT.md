@@ -1,5 +1,8 @@
 # Deployment Preparation
 
+For the free PythonAnywhere setup, follow [PYTHONANYWHERE.md](PYTHONANYWHERE.md).
+The rest of this page covers the Waitress/Docker runner (serve.py).
+
 One Waitress process serves the built React site and Flask API under one origin.
 There is no hosted service configured yet. SQLite and private uploads require a
 single instance with persistent writable disk; multiple independent disks would
