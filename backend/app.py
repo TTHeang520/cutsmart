@@ -1,4 +1,5 @@
 import json
+import mimetypes
 import os
 import re
 import sqlite3
@@ -14,8 +15,12 @@ from werkzeug.middleware.proxy_fix import ProxyFix
 from werkzeug.security import generate_password_hash, check_password_hash
 from pathlib import Path
 from uuid import uuid4
-from PIL import Image, UnidentifiedImageError
+from PIL import Image, ImageOps, UnidentifiedImageError
 from config import DATA_DIR, FRONTEND_DIR, PRODUCTION
+
+# Some systems (e.g. Windows) do not map .webp, so photos would be served as
+# application/octet-stream, which nosniff tells browsers not to display.
+mimetypes.add_type("image/webp", ".webp")
 
 app = Flask(__name__)
 app.config["SESSION_COOKIE_SECURE"] = os.environ.get("CUTSMART_ENV") == "production"
@@ -66,6 +71,28 @@ def allowed_image_file(filename):
         in ALLOWED_IMAGE_EXTENSIONS
     )
 
+# Photos are re-encoded on upload: phone pictures are often 3-5 MB, and hosting
+# disk is small (512 MB on PythonAnywhere's free plan). Re-encoding also drops
+# hidden EXIF metadata such as the GPS location where the photo was taken.
+MAX_PHOTO_SIDE = 1280
+PHOTO_QUALITY = 80
+
+
+def save_compressed_photo(photo, file_path):
+    """Save an already validated upload as a resized WebP image without metadata."""
+    photo.stream.seek(0)
+
+    with Image.open(photo.stream) as image:
+        # Apply the camera's rotation flag before EXIF data is discarded.
+        image = ImageOps.exif_transpose(image)
+        image.thumbnail((MAX_PHOTO_SIDE, MAX_PHOTO_SIDE))
+
+        if image.mode not in ("RGB", "RGBA"):
+            image = image.convert("RGBA" if "transparency" in image.info else "RGB")
+
+        image.save(file_path, "WEBP", quality=PHOTO_QUALITY, method=4)
+
+
 def detect_image_extension(photo):
     try:
         image = Image.open(photo.stream)
@@ -73,7 +100,7 @@ def detect_image_extension(photo):
 
         image_format = image.format.lower()
         photo.stream.seek(0)
-    except (UnidentifiedImageError, OSError, SyntaxError):
+    except (UnidentifiedImageError, OSError, SyntaxError, Image.DecompressionBombError):
         photo.stream.seek(0)
         return None
 
@@ -1085,10 +1112,19 @@ def upload_food_photo(food_id):
             "success": False,
             "message": "Uploaded file is not a valid JPG, PNG, or WebP image"
         }, 400
-    filename = f"{uuid4().hex}.{extension}"
+    filename = f"{uuid4().hex}.webp"
 
     file_path = FOOD_PHOTO_FOLDER / filename
-    photo.save(file_path)
+
+    try:
+        save_compressed_photo(photo, file_path)
+    except (OSError, ValueError, Image.DecompressionBombError):
+        file_path.unlink(missing_ok=True)
+
+        return {
+            "success": False,
+            "message": "This photo could not be processed. Try a different image"
+        }, 400
 
     stored_path = f"food_photos/{filename}"
 

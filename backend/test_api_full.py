@@ -275,7 +275,7 @@ class PhotoTest(FullApiCase):
         self.assertTrue(first_file.exists())
         shown = self.client.get(first.json["photo_url"])
         self.assertEqual(shown.status_code, 200)
-        self.assertEqual(shown.mimetype, "image/png")
+        self.assertEqual(shown.mimetype, "image/webp")
         shown.close()
         second = self.upload_photo(food["id"], png_bytes("blue"), "meal.PNG")
         self.assertEqual(second.status_code, 200, second.json)
@@ -286,6 +286,35 @@ class PhotoTest(FullApiCase):
         self.assertEqual(list(self.photos.iterdir()), [])
         again = self.client.delete(f"/api/foods/{food['id']}/photo", json={"user_id": self.user_id})
         self.assertEqual(again.status_code, 404)
+
+    def test_photos_are_shrunk_rotated_and_stripped_of_location(self):
+        food = self.add_food()
+        exif = Image.Exif()
+        exif[0x0112] = 6  # Orientation: the camera was rotated 90 degrees.
+        exif[0x8825] = {2: (1.0, 2.0, 3.0)}  # GPS block, as phones add.
+        big = io.BytesIO()
+        Image.new("RGB", (4000, 3000), "green").save(big, "JPEG", quality=95, exif=exif)
+        response = self.upload_photo(food["id"], io.BytesIO(big.getvalue()), "IMG_0001.JPG")
+        self.assertEqual(response.status_code, 200, response.json)
+        self.assertTrue(response.json["photo_path"].endswith(".webp"))
+        stored = self.photos / response.json["photo_path"].split("/")[-1]
+        with Image.open(stored) as saved:
+            self.assertEqual(saved.format, "WEBP")
+            # Rotated upright (portrait) and no side longer than 1280 px.
+            self.assertEqual(saved.size, (960, 1280))
+            self.assertEqual(len(saved.getexif()), 0)
+        self.assertLess(stored.stat().st_size, len(big.getvalue()))
+
+    def test_transparent_png_keeps_working(self):
+        food = self.add_food()
+        image = io.BytesIO()
+        Image.new("RGBA", (20, 20), (255, 0, 0, 0)).save(image, "PNG")
+        image.seek(0)
+        self.assertEqual(self.upload_photo(food["id"], image, "sticker.png").status_code, 200)
+        palette = io.BytesIO()
+        Image.new("P", (20, 20)).save(palette, "PNG", transparency=0)
+        palette.seek(0)
+        self.assertEqual(self.upload_photo(food["id"], palette, "palette.png").status_code, 200)
 
     def test_rejects_fake_and_unsupported_images(self):
         food = self.add_food()
