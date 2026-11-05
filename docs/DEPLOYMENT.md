@@ -30,6 +30,7 @@ port if occupied. Missing frontend/dist/index.html prevents startup.
 | HOST | Defaults to 127.0.0.1; hosted services may require 0.0.0.0 |
 | PORT | Defaults to 8080; use the host's assigned port |
 | CUTSMART_TRUSTED_PROXY | Optional exact proxy address; wildcard is rejected |
+| CUTSMART_PROXY_HOPS | For WSGI hosts such as PythonAnywhere that put their own proxy in front of the app (no serve.py): number of proxies to trust for client IP and HTTPS, normally 1. Leave unset otherwise |
 
 .env.example is documentation; Python does not load it automatically. Set variables
 in the hosting environment or shell. The data directory contains cutsmart_database

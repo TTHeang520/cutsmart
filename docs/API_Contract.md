@@ -2,6 +2,38 @@
 
 This document describes the backend API routes that the frontend should call.
 
+## Pre-launch Changes (2026-11-05)
+
+Summary for the frontend; details are in each route's section below.
+
+- **Plan input limits** (`POST /api/plan` and `POST /api/plans/save`): age 18-100,
+  height 100-250 cm, current and target weight 30-350 kg, desired timeline 1-520
+  weeks, target lower than current weight, and target BMI at least 18.5. Failures
+  return 400 with a message that can be shown to the user as-is. Booleans, NaN and
+  infinity are rejected as non-numbers.
+- **Save Plan recalculates the plan on the server.** `plan_result` is now optional
+  and its numbers are ignored; only `plan_result.timeline_status == "fastest_safe"`
+  (or an explicit top-level `plan_option`) selects the faster pace. The response
+  includes `plan`, the stored input and calculated values. Use it instead of the
+  client copy.
+- **New `PUT /api/weights/<weight_id>`** edits a weight entry, including the
+  journey's starting weight (value and note only).
+- `POST /api/weights` now returns the saved row, including its `id` and `is_initial`.
+- `GET /api/weights/history/<user_id>` also returns `journey`. Use
+  `journey.initial_weight_kg` as the start weight, not the latest plan's
+  `current_weight_kg`, which changes whenever the plan is modified.
+- `GET /api/users/<user_id>/journeys/<journey_id>/plans` returns 404 for a journey
+  the user does not own and now also returns `journey`.
+- `PUT /api/foods/<food_id>` returns the full stored row, including `photo_path`.
+- **Log field limits:** food and exercise names are required text of 100 characters
+  or fewer (trimmed); notes are optional text of 500 or fewer; exercise category is
+  optional text of 40 or fewer; weight note 200 or fewer. Food calories 1-10,000,
+  macros 0-1,000 g, exercise duration up to 1,440 minutes, calories burned up to
+  10,000, logged weight 20-500 kg.
+- Every JSON route returns a 400 JSON error when the body is not a JSON object.
+- Photo uploads are measured on the file itself (5 MB); the request may be slightly
+  larger to allow for form overhead.
+
 ## Authentication (2026-10-18)
 
 Login and registration are rate limited per client IP: 10 login requests and
@@ -469,6 +501,14 @@ fat_g
 
 `desired_timeline_weeks`, `alternative_plan`, and `warning` may be empty depending on the generated plan.
 
+`input_data` is validated with the same rules and limits as `POST /api/plan`.
+
+`plan_result` is optional. The server recalculates the plan from `input_data` and
+never stores numbers supplied by the browser. To save the faster pace, either send
+`plan_result` with `timeline_status` set to `fastest_safe` (as returned by
+`POST /api/plan` with `plan_option: "fastest_safe"`) or send a top-level
+`"plan_option": "fastest_safe"`.
+
 ### For Success Response
 
 ```json
@@ -477,11 +517,17 @@ fat_g
   "message": "Plan saved successfully",
   "mode": "update",
   "journey_id": 3,
-  "plan_id": 8
+  "plan_id": 8,
+  "plan": {
+    "age": 22.0,
+    "gender": "male",
+    "target_calories": 1820,
+    "...": "every input and calculated plan field"
+  }
 }
 ```
 
-`journey_id` identifies the journey containing the saved plan. `plan_id` identifies the newly inserted plan version.
+`journey_id` identifies the journey containing the saved plan. `plan_id` identifies the newly inserted plan version. `plan` is the server-calculated plan that was stored; display this rather than the client's copy.
 
 ### For Error Responses
 
@@ -954,7 +1000,9 @@ POST /api/weights
 
 If the user already has a weight record for that date, the backend updates its `weight_kg`, `note` and `updated_at` values.
 
-The journey's initial (baseline) weight is a separate `is_initial` record and is never changed by this route, even on the start date.
+The journey's initial (baseline) weight is a separate `is_initial` record and is never changed by this route, even on the start date. Use `PUT /api/weights/<weight_id>` to correct it.
+
+`weight_kg` must be between 20 and 500. `note` is optional text of 200 characters or fewer.
 
 ### For Success Response
 
@@ -963,11 +1011,15 @@ The journey's initial (baseline) weight is a separate `is_initial` record and is
   "success": true,
   "message": "Weight recorded successfully",
   "weight": {
+    "id": 12,
     "user_id": 1,
     "journey_id": 3,
     "weight_kg": 77.9,
     "logged_date": "2026-06-30",
-    "note": "After morning run"
+    "is_initial": 0,
+    "note": "After morning run",
+    "created_at": "2026-06-30 01:12:00",
+    "updated_at": "2026-06-30 01:12:00"
   }
 }
 ```
@@ -1036,6 +1088,58 @@ No active journey:
   "message": "Active journey not found. Create a plan first"
 }
 ```
+
+## Edit Weight
+
+Route:
+
+```text
+PUT /api/weights/<weight_id>
+```
+
+Edits one weight entry in the active journey.
+
+### Request
+
+```json
+{
+  "user_id": 1,
+  "weight_kg": 77.6,
+  "logged_date": "2026-06-30",
+  "note": "Corrected"
+}
+```
+
+All of `weight_kg`, `logged_date` and `note` are sent; they replace the stored
+values. Limits match `POST /api/weights`.
+
+For the starting weight (`is_initial: 1`), only `weight_kg` and `note` may change:
+send its existing `logged_date`. Changing its value also updates the journey's
+`initial_weight_kg`, so progress figures use the corrected baseline.
+
+### For Success Response
+
+```json
+{
+  "success": true,
+  "message": "Weight entry updated successfully",
+  "weight": {
+    "id": 12,
+    "weight_kg": 77.6,
+    "logged_date": "2026-06-30",
+    "is_initial": 0,
+    "note": "Corrected"
+  }
+}
+```
+
+### For Error Responses
+
+| Status | When |
+| --- | --- |
+| 400 | Invalid weight/date/note, or the starting weight's date was changed |
+| 404 | No active journey, or the entry is not in the user's active journey |
+| 409 | Another regular entry already exists on the new date |
 
 ## Delete Weight
 
