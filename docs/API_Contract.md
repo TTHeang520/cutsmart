@@ -33,6 +33,8 @@ Summary for the frontend; details are in each route's section below.
 - Every JSON route returns a 400 JSON error when the body is not a JSON object.
 - Photo uploads are measured on the file itself (5 MB); the request may be slightly
   larger to allow for form overhead.
+- Uploaded photos are re-encoded: resized to at most 1280 px, saved as WebP
+  (`food_photos/<id>.webp`) and stripped of metadata such as GPS location.
 
 ## Authentication (2026-10-18)
 
