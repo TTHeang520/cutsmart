@@ -1,6 +1,6 @@
 import { apiFetch } from "../utils/api";
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, Navigate, useNavigate } from "react-router-dom";
 import "./Login.css";
 
 
@@ -52,6 +52,10 @@ function Login() {
     } finally {
       setIsLoading(false);
     }
+  }
+
+  if (localStorage.getItem("user")) {
+    return <Navigate to="/dashboard" replace />;
   }
 
   return (
