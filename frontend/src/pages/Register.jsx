@@ -1,6 +1,6 @@
 import { apiFetch } from "../utils/api";
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, Navigate, useNavigate } from "react-router-dom";
 import "./Login.css";
 
 // Keep these rules in step with get_email_error in backend/app.py.
@@ -59,6 +59,10 @@ function Register() {
     } finally {
       setIsLoading(false);
     }
+  }
+
+  if (localStorage.getItem("user")) {
+    return <Navigate to="/dashboard" replace />;
   }
 
   return (

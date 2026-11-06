@@ -205,6 +205,23 @@ button:disabled {
   font-weight: 700;
 }
 
+.step-hint {
+  margin: 0;
+  padding: 12px 14px;
+  border: 1px solid rgba(251, 191, 36, 0.45);
+  border-radius: 16px;
+  color: #fbbf24;
+  background: rgba(251, 191, 36, 0.1);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.step-help {
+  margin: 10px 2px 0;
+  color: rgba(248, 250, 252, 0.6);
+  font-size: 13px;
+}
+
 .form-message.success {
   color: #166534;
   background: #ecfdf3;
@@ -4313,6 +4330,30 @@ button:disabled {
 .about-weight-card,
 .weight-entry-form {
   padding: 28px;
+}
+
+.weight-form-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+}
+
+.weight-form-actions button:only-child {
+  grid-column: 1 / -1;
+}
+
+.tracker-form .weight-form-cancel {
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.weight-entry-form input:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.weight-history-list > div.is-editing {
+  border-bottom-color: rgba(124, 255, 107, 0.6);
 }
 
 .weight-goal-progress {

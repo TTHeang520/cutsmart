@@ -1,4 +1,5 @@
 import { apiFetch, API_BASE_URL } from "../utils/api";
+import { useLatestPlan } from "../utils/latestPlan";
 import { getToday, toDateString } from "../utils/dateUtils";
 import { useEffect, useMemo, useState } from "react";
 import { Link, Navigate } from "react-router-dom";
@@ -14,17 +15,18 @@ const CHART_RANGES = [
   { key: "All", days: null },
 ];
 
-
-
 function WeightTrack() {
   const savedUser = localStorage.getItem("user");
   const user = savedUser ? JSON.parse(savedUser) : null;
-  const latestPlan = getStoredLatestPlan(user);
+  const { plan: latestPlan } = useLatestPlan(user?.id);
   const [weight, setWeight] = useState("");
   const [loggedDate, setLoggedDate] = useState(getToday());
   const [note, setNote] = useState("");
   const [activeRange, setActiveRange] = useState("All");
   const [history, setHistory] = useState([]);
+  // The journey holds the real starting weight; the plan's current weight changes when the plan is modified.
+  const [journey, setJourney] = useState(null);
+  const [editingEntry, setEditingEntry] = useState(null);
   const [isLoadingHistory, setIsLoadingHistory] = useState(Boolean(user?.id));
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState("");
@@ -41,14 +43,16 @@ function WeightTrack() {
       setError("");
 
       try {
-        const nextHistory = await fetchWeightHistory(user.id);
+        const data = await fetchWeightHistory(user.id);
 
         if (isCurrent) {
-          setHistory(nextHistory);
+          setHistory(data.history);
+          setJourney(data.journey);
         }
       } catch (requestError) {
         if (isCurrent) {
           setHistory([]);
+          setJourney(null);
           setError(requestError.message || "Could not load your weight history.");
         }
       } finally {
@@ -69,7 +73,7 @@ function WeightTrack() {
     () => [...history].sort((a, b) => a.logged_date.localeCompare(b.logged_date)),
     [history]
   );
-  const weightStats = getWeightStats({ weights: sortedHistory, plan: latestPlan });
+  const weightStats = getWeightStats({ weights: sortedHistory, plan: latestPlan, journey });
   const rangeChartData = filterByRange(weightStats.chartData, activeRange);
 
   async function handleSubmit(event) {
@@ -78,12 +82,14 @@ function WeightTrack() {
     setError("");
 
     try {
-      await saveWeightEntry(user.id, Number(weight), loggedDate, note);
-      const nextHistory = await fetchWeightHistory(user.id);
+      if (editingEntry) {
+        await updateWeightEntry(editingEntry.id, user.id, Number(weight), loggedDate, note);
+      } else {
+        await saveWeightEntry(user.id, Number(weight), loggedDate, note);
+      }
 
-      setHistory(nextHistory);
-      setWeight("");
-      setNote("");
+      await reloadHistory();
+      resetForm();
     } catch (requestError) {
       setError(requestError.message || "Could not save your weight entry.");
     } finally {
@@ -100,16 +106,36 @@ function WeightTrack() {
 
     try {
       await deleteWeightEntry(entry.id, user.id);
-      setHistory(await fetchWeightHistory(user.id));
+
+      if (editingEntry?.id === entry.id) {
+        resetForm();
+      }
+
+      await reloadHistory();
     } catch (requestError) {
       setError(requestError.message || "Could not delete this weight entry.");
     }
   }
 
+  async function reloadHistory() {
+    const data = await fetchWeightHistory(user.id);
+    setHistory(data.history);
+    setJourney(data.journey);
+  }
+
   function handleEdit(entry) {
+    setError("");
+    setEditingEntry(entry);
     setLoggedDate(entry.logged_date);
     setWeight(String(entry.weight_kg));
     setNote(entry.note || "");
+  }
+
+  function resetForm() {
+    setEditingEntry(null);
+    setLoggedDate(getToday());
+    setWeight("");
+    setNote("");
   }
 
   if (!user) {
@@ -177,8 +203,12 @@ function WeightTrack() {
           </div>
           <WeightLineChart
             entries={rangeChartData}
-            sampleWhenEmpty={weightStats.chartData.length === 0}
-            emptyText="No weight entries in this range."
+            sampleWhenEmpty={false}
+            emptyText={
+              weightStats.chartData.length === 0
+                ? "Add your first weight entry to see your trend."
+                : "No weight entries in this range."
+            }
           />
         </section>
 
@@ -205,21 +235,25 @@ function WeightTrack() {
           </section>
 
           <form className="tracker-form weight-entry-form" onSubmit={handleSubmit}>
-            <h2>Add new entry</h2>
+            <h2>{editingEntry ? "Edit entry" : "Add new entry"}</h2>
             <label>
               Date
               <input
                 type="date"
                 value={loggedDate}
                 onChange={(event) => setLoggedDate(event.target.value)}
+                // The journey's starting weight keeps its date; only its value and note can change.
+                disabled={Boolean(editingEntry?.is_initial)}
                 required
               />
+              {editingEntry?.is_initial ? <small>The starting weight's date can't be changed.</small> : null}
             </label>
             <label>
               Weight
               <input
                 type="number"
-                min="1"
+                min="20"
+                max="500"
                 step="0.01"
                 value={weight}
                 onChange={(event) => setWeight(event.target.value)}
@@ -238,9 +272,16 @@ function WeightTrack() {
                 maxLength={200}
               />
             </label>
-            <button type="submit" disabled={isSaving}>
-              {isSaving ? "Saving..." : "Save Entry"}
-            </button>
+            <div className="weight-form-actions">
+              <button type="submit" disabled={isSaving}>
+                {isSaving ? "Saving..." : editingEntry ? "Save Changes" : "Save Entry"}
+              </button>
+              {editingEntry && (
+                <button type="button" className="weight-form-cancel" onClick={resetForm} disabled={isSaving}>
+                  Cancel
+                </button>
+              )}
+            </div>
           </form>
         </div>
 
@@ -250,7 +291,7 @@ function WeightTrack() {
             <p>No weight entries yet.</p>
           ) : (
             [...sortedHistory].reverse().map((entry, index, entries) => (
-              <div key={entry.id || entry.logged_date}>
+              <div key={entry.id || entry.logged_date} className={entry.id === editingEntry?.id ? "is-editing" : ""}>
                 <div>
                   <strong>{entry.logged_date}</strong>
                   <small>{entry.note || "No note"}</small>
@@ -336,22 +377,6 @@ function getDateRange(entries) {
   return `${entries[0].logged_date} - ${entries[entries.length - 1].logged_date}`;
 }
 
-function getStoredLatestPlan(user) {
-  const rawPlan = localStorage.getItem(
-    user?.id ? `cutsmart_latest_plan_${user.id}` : "cutsmart_latest_plan_guest"
-  );
-
-  if (!rawPlan) {
-    return null;
-  }
-
-  try {
-    return JSON.parse(rawPlan);
-  } catch {
-    return null;
-  }
-}
-
 function filterByRange(entries, rangeKey) {
   const range = CHART_RANGES.find(({ key }) => key === rangeKey);
 
@@ -383,7 +408,37 @@ async function fetchWeightHistory(userId) {
     throw new Error(data.message || "Could not load your weight history.");
   }
 
-  return Array.isArray(data.history) ? data.history : [];
+  return {
+    history: Array.isArray(data.history) ? data.history : [],
+    journey: data.journey || null,
+  };
+}
+
+async function updateWeightEntry(weightId, userId, weightKg, loggedDate, note) {
+  const response = await apiFetch(`${API_BASE_URL}/api/weights/${weightId}`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      user_id: userId,
+      weight_kg: weightKg,
+      logged_date: loggedDate,
+      note,
+    }),
+  });
+
+  const data = await response.json().catch(() => ({
+    success: false,
+    message: `Edit weight API returned status ${response.status}.`,
+  }));
+
+  if (!response.ok || data.success === false) {
+    // The backend's message is user-facing, e.g. 409 when another entry already uses that date.
+    throw new Error(data.message || "Could not update your weight entry.");
+  }
+
+  return data.weight;
 }
 
 async function saveWeightEntry(userId, weightKg, loggedDate, note) {
