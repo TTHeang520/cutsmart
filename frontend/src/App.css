@@ -5772,6 +5772,7 @@ button:disabled {
   border-radius: 0;
   background: transparent;
   box-shadow: none;
+  backdrop-filter: none;
 }
 
 .app-log-header,
@@ -6217,6 +6218,424 @@ button:disabled {
 
 .app-bottom-nav {
   bottom: calc(24px + env(safe-area-inset-bottom));
+}
+
+/* Open issues #6 and #7: keep feedback visible and make phone layouts action-first. */
+.app-log-alert {
+  position: fixed;
+  z-index: 120;
+  left: 50%;
+  bottom: calc(112px + env(safe-area-inset-bottom));
+  width: min(560px, calc(100vw - 32px));
+  margin: 0;
+  padding: 14px 18px;
+  transform: translateX(-50%);
+  border: 1px solid rgba(251, 191, 36, 0.42);
+  border-radius: 16px;
+  color: #fff7d6;
+  background: rgba(35, 24, 10, 0.96);
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.42);
+  text-align: center;
+  font-weight: 800;
+}
+
+@media (max-width: 900px) {
+  .app-log-metrics,
+  .exercise-metrics,
+  .weight-stat-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .app-log-shell,
+  .weight-track-shell {
+    gap: 12px;
+  }
+
+  .app-log-header,
+  .weight-track-header {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 0;
+  }
+
+  .app-log-header h1,
+  .weight-track-header h1 {
+    font-size: 32px;
+  }
+
+  .app-log-header p,
+  .weight-track-header p {
+    margin-top: 6px;
+    font-size: 13px;
+  }
+
+  .app-log-header a,
+  .weight-header-actions a {
+    width: 44px;
+    min-height: 44px;
+    padding: 0;
+    justify-content: center;
+    font-size: 0;
+  }
+
+  .app-log-metrics,
+  .exercise-metrics,
+  .weight-stat-grid {
+    gap: 8px;
+  }
+
+  .app-log-metric,
+  .weight-stat-card {
+    min-height: 104px;
+    gap: 5px;
+    padding: 12px;
+    border-radius: 18px;
+  }
+
+  .app-log-metric i,
+  .app-log-icon,
+  .weight-stat-card i {
+    width: 36px;
+    height: 36px;
+    border-radius: 12px;
+  }
+
+  .app-log-metric i svg,
+  .weight-stat-card i svg {
+    width: 20px;
+    height: 20px;
+  }
+
+  .app-log-metric strong,
+  .weight-stat-card strong {
+    font-size: 19px;
+  }
+
+  .app-log-metric small,
+  .weight-stat-card small {
+    display: none;
+  }
+
+  .app-log-progress {
+    gap: 6px;
+  }
+
+  .app-log-form,
+  .app-log-list,
+  .app-log-weekly-card,
+  .about-weight-card,
+  .weight-entry-form,
+  .weight-history-list {
+    padding: 16px;
+    border-radius: 20px;
+  }
+
+  .app-log-form {
+    gap: 12px;
+  }
+
+  .app-log-card-heading h2,
+  .app-log-list-header h2,
+  .app-log-weekly-card h2,
+  .about-weight-card h2,
+  .weight-entry-form h2,
+  .weight-history-list h2 {
+    font-size: 22px;
+  }
+
+  .app-form-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .app-log-entry {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    gap: 10px;
+    padding: 10px;
+  }
+
+  .app-log-entry-icon,
+  .app-log-entry-photo {
+    width: 44px;
+    height: 44px;
+    border-radius: 14px;
+  }
+
+  .app-log-entry-actions {
+    grid-column: 2 / -1;
+    justify-content: flex-end;
+  }
+
+  .weight-track-grid {
+    gap: 12px;
+  }
+
+  .weight-history-list > div {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px;
+    padding: 12px 0;
+  }
+
+  .weight-history-list .weight-diff-pill,
+  .weight-history-list .weight-entry-actions {
+    grid-column: 2;
+  }
+
+  .premium-dashboard-page .daily-dashboard-shell {
+    gap: 12px;
+    padding: 0;
+  }
+
+  .premium-dashboard-header {
+    min-height: 92px;
+    margin: 0;
+    padding: 0;
+  }
+
+  .premium-dashboard-header > div:first-child {
+    padding-top: 0;
+    padding-right: 54px;
+  }
+
+  .premium-dashboard-header h1 {
+    font-size: 34px;
+  }
+
+  .daily-dashboard-greeting,
+  .premium-dashboard-header p:last-child {
+    font-size: 13px;
+  }
+
+  .dashboard-hero-visual {
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 46px;
+    min-height: 46px;
+    margin: 0;
+    padding: 0;
+  }
+
+  .dashboard-hero-visual::before,
+  .dashboard-hero-visual .hero-mascot {
+    display: none;
+  }
+
+  .dashboard-profile-pill {
+    position: static;
+    padding: 4px;
+  }
+
+  .dashboard-profile-pill i {
+    display: none;
+  }
+
+  .dashboard-profile-menu {
+    top: 50px;
+    right: 0;
+  }
+
+  .premium-summary-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .dashboard-metric-card {
+    min-height: 118px;
+    gap: 5px;
+    padding: 12px;
+    border-radius: 18px;
+  }
+
+  .metric-icon {
+    width: 34px;
+    height: 34px;
+    border-radius: 11px;
+    font-size: 19px;
+  }
+
+  .dashboard-metric-card p,
+  .dashboard-metric-card > span:last-of-type {
+    font-size: 12px;
+  }
+
+  .dashboard-metric-card strong {
+    font-size: 20px;
+  }
+
+  .dashboard-metric-card > span:last-of-type {
+    display: none;
+  }
+
+  .dashboard-main-grid,
+  .dashboard-lower-grid {
+    gap: 10px;
+  }
+
+  .dashboard-feature-card {
+    padding: 14px;
+    border-radius: 18px;
+  }
+
+  .dashboard-feature-card h2,
+  .dashboard-weight-card > .daily-dashboard-eyebrow,
+  .log-widget-card .daily-dashboard-eyebrow,
+  .streak-card > .daily-dashboard-eyebrow {
+    margin-bottom: 10px;
+    font-size: 18px;
+  }
+
+  .nutrition-ring-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px;
+    margin-top: 8px;
+  }
+
+  .macro-ring {
+    gap: 5px;
+  }
+
+  .macro-ring .circular-progress,
+  .log-widget-card .circular-progress {
+    width: 70px;
+    height: 70px;
+  }
+
+  .circular-progress strong {
+    font-size: 13px;
+  }
+
+  .macro-bar {
+    height: 8px;
+    margin-top: 10px;
+  }
+
+  .log-widget-card {
+    grid-template-columns: minmax(0, 1fr) 70px;
+    gap: 10px;
+  }
+
+  .log-widget-card h2,
+  .dashboard-weight-card h2,
+  .streak-card h2 {
+    font-size: 24px;
+  }
+
+  .log-widget-card a,
+  .dashboard-weight-card a,
+  .streak-card a {
+    min-height: 36px;
+  }
+
+  .dashboard-weight-card .weight-chart-compact-wrap {
+    grid-template-rows: 70px;
+    min-height: 70px;
+  }
+
+  .weight-preview-stats .macro-pill {
+    min-height: 44px;
+  }
+
+  .quick-actions-card {
+    gap: 10px;
+  }
+
+  .quick-action-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .quick-action-grid a {
+    min-height: 64px;
+    aspect-ratio: auto;
+    flex-direction: row;
+    gap: 8px;
+    padding: 8px;
+    border-radius: 14px;
+  }
+
+  .quick-action-icon {
+    width: 34px;
+    height: 34px;
+    border-radius: 11px;
+    font-size: 20px;
+  }
+
+  .quick-action-grid span:not(.quick-action-icon) {
+    font-size: 12px;
+  }
+
+  .quick-action-grid small {
+    display: none;
+  }
+
+  .week-pill-row,
+  .streak-dot-row {
+    gap: 5px;
+    margin-top: 10px;
+  }
+
+  .week-pill-row span,
+  .streak-dot-row span {
+    min-width: 0;
+    min-height: 30px;
+    height: 30px;
+    font-size: 11px;
+  }
+
+  .weekly-stats {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px;
+    margin-top: 10px;
+  }
+
+  .weekly-stats .macro-pill {
+    min-height: 52px;
+    padding: 8px;
+  }
+
+  .weekly-stats .macro-pill strong {
+    font-size: 13px;
+  }
+
+  .streak-card {
+    min-height: 0;
+  }
+
+  .streak-watermark {
+    width: 68px;
+    height: 68px;
+    font-size: 44px;
+  }
+
+  .dashboard-tip-card {
+    min-height: 0;
+    padding: 12px 14px;
+  }
+
+  .tip-icon {
+    width: 34px;
+    height: 34px;
+    font-size: 19px;
+  }
+
+  .bottom-plan-summary {
+    min-height: 0;
+    padding: 14px;
+  }
+
+  .plan-summary-button-row {
+    gap: 8px;
+  }
+
+  .plan-summary-button-row button {
+    min-height: 38px;
+    padding: 0 8px;
+    font-size: 12px;
+  }
 }
 
 /* Journey History page. */

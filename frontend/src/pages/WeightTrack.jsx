@@ -186,54 +186,9 @@ function WeightTrack() {
         </div>
 
         {isLoadingHistory && <p className="app-log-empty">Loading weight history...</p>}
-        {error && <p className="app-log-empty" role="alert">{error}</p>}
-
-        <section className="weight-chart-card">
-          <div className="weight-range-tabs">
-            {CHART_RANGES.map(({ key }) => (
-              <button
-                type="button"
-                key={key}
-                className={activeRange === key ? "active" : ""}
-                onClick={() => setActiveRange(key)}
-              >
-                {key}
-              </button>
-            ))}
-          </div>
-          <WeightLineChart
-            entries={rangeChartData}
-            sampleWhenEmpty={false}
-            emptyText={
-              weightStats.chartData.length === 0
-                ? "Add your first weight entry to see your trend."
-                : "No weight entries in this range."
-            }
-          />
-        </section>
+        {error && <p className="app-log-alert" role="alert">{error}</p>}
 
         <div className="weight-track-grid">
-          <section className="about-weight-card">
-            <h2>About you</h2>
-            <WeightFact label="Starting weight" value={weightStats.startWeight ? `${formatNumber(weightStats.startWeight)} kg` : "--"} />
-            <WeightFact label="Current weight" value={weightStats.latestWeight ? `${formatNumber(weightStats.latestWeight)} kg` : "--"} highlight />
-            <WeightFact label="Goal weight" value={weightStats.targetWeight ? `${formatNumber(weightStats.targetWeight)} kg` : "--"} />
-            <WeightFact
-              label="Total progress"
-              value={formatSignedWeight(weightStats.weightChange)}
-              highlight
-            />
-            <div className="weight-goal-progress">
-              <div>
-                <span>Progress to goal</span>
-                <strong>{formatNumber(weightStats.progressPercent)}%</strong>
-              </div>
-              <div className="weight-goal-bar">
-                <span style={{ width: `${weightStats.progressPercent}%` }} />
-              </div>
-            </div>
-          </section>
-
           <form className="tracker-form weight-entry-form" onSubmit={handleSubmit}>
             <h2>{editingEntry ? "Edit entry" : "Add new entry"}</h2>
             <label>
@@ -283,7 +238,52 @@ function WeightTrack() {
               )}
             </div>
           </form>
+
+          <section className="about-weight-card">
+            <h2>About you</h2>
+            <WeightFact label="Starting weight" value={weightStats.startWeight ? `${formatNumber(weightStats.startWeight)} kg` : "--"} />
+            <WeightFact label="Current weight" value={weightStats.latestWeight ? `${formatNumber(weightStats.latestWeight)} kg` : "--"} highlight />
+            <WeightFact label="Goal weight" value={weightStats.targetWeight ? `${formatNumber(weightStats.targetWeight)} kg` : "--"} />
+            <WeightFact
+              label="Total progress"
+              value={formatSignedWeight(weightStats.weightChange)}
+              highlight
+            />
+            <div className="weight-goal-progress">
+              <div>
+                <span>Progress to goal</span>
+                <strong>{formatNumber(weightStats.progressPercent)}%</strong>
+              </div>
+              <div className="weight-goal-bar">
+                <span style={{ width: `${weightStats.progressPercent}%` }} />
+              </div>
+            </div>
+          </section>
         </div>
+
+        <section className="weight-chart-card">
+          <div className="weight-range-tabs">
+            {CHART_RANGES.map(({ key }) => (
+              <button
+                type="button"
+                key={key}
+                className={activeRange === key ? "active" : ""}
+                onClick={() => setActiveRange(key)}
+              >
+                {key}
+              </button>
+            ))}
+          </div>
+          <WeightLineChart
+            entries={rangeChartData}
+            sampleWhenEmpty={false}
+            emptyText={
+              weightStats.chartData.length === 0
+                ? "Add your first weight entry to see your trend."
+                : "No weight entries in this range."
+            }
+          />
+        </section>
 
         <section className="tracker-list weight-history-list">
           <h2>Weight history</h2>
