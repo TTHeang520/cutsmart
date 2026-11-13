@@ -1,14 +1,15 @@
 import json
+import math
 import mimetypes
 import os
 import re
 import sqlite3
-from datetime import date, time
+from datetime import date, datetime, time, timedelta, timezone
 
 from flask import Flask, request, send_from_directory, g, make_response
 from auth import init_auth, issue_session, COOKIE_NAME, SESSION_SECONDS
 from database import get_db_connection
-from database import init_db, create_user, get_user_from_email, get_active_journey, start_new_journey, save_user_plan, get_latest_user_plan, save_weight_log, get_weight_history, get_weight_by_date, get_latest_weight, get_weight_entry, update_weight_log, delete_weight_log, save_food_log, get_food_history, get_food_logs_by_date, update_food_log, delete_food_log, save_exercise_log, get_exercise_history, get_exercise_logs_by_date, update_exercise_log, delete_exercise_log, get_user_journeys, get_journey_for_user, get_plans_by_journey, get_food_entry, update_food_photo_path, get_daily_activity
+from database import init_db, create_user, get_user_from_email, get_active_journey, start_new_journey, save_user_plan, get_latest_user_plan, save_weight_log, get_weight_history, get_weight_by_date, get_latest_weight, get_weight_entry, get_journey_start_date, update_weight_log, delete_weight_log, save_food_log, get_food_history, get_food_logs_by_date, update_food_log, delete_food_log, save_exercise_log, get_exercise_history, get_exercise_logs_by_date, update_exercise_log, delete_exercise_log, get_user_journeys, get_journey_for_user, get_plans_by_journey, get_food_entry, update_food_photo_path, get_daily_activity
 from planner import generate_plan
 from werkzeug.exceptions import RequestEntityTooLarge
 from werkzeug.middleware.proxy_fix import ProxyFix
@@ -345,6 +346,19 @@ def login():
     return response
 
 
+def latest_allowed_date():
+    """Latest calendar date a user can log for.
+
+    The server runs on UTC, but users log by their own local day, which can be
+    up to one day ahead of UTC (e.g. Singapore/Malaysia in the morning), so
+    allow tomorrow's UTC date and nothing later.
+    """
+    return datetime.now(timezone.utc).date() + timedelta(days=1)
+
+
+FUTURE_DATE_MESSAGE = "You can't log entries for a future date"
+
+
 PLAN_REQUIRED_FIELDS = [
     "age",
     "gender",
@@ -430,7 +444,8 @@ def validate_plan_input(data):
 
     height_m = clean["height_cm"] / 100
     if clean["target_weight_kg"] / (height_m * height_m) < MIN_TARGET_BMI:
-        lowest_target = MIN_TARGET_BMI * height_m * height_m
+        # Round up, not to nearest: a rounded-down suggestion would itself be rejected.
+        lowest_target = math.ceil(MIN_TARGET_BMI * height_m * height_m * 10) / 10
         return None, (
             "Target weight would be underweight for your height. "
             f"Choose a target of at least {lowest_target:.1f} kg"
@@ -505,6 +520,12 @@ def save_plan():
             return {
                 "success": False,
                 "message": "Start date must use YYYY-MM-DD format"
+            }, 400
+
+        if date.fromisoformat(start_date) > latest_allowed_date():
+            return {
+                "success": False,
+                "message": "Start date cannot be in the future"
             }, 400
 
     if mode not in ("update", "new"):
@@ -756,6 +777,9 @@ def parse_weight_entry(data):
     if parsed_date.isoformat() != logged_date:
         return None, None, None, "Logged date must use YYYY-MM-DD format"
 
+    if parsed_date > latest_allowed_date():
+        return None, None, None, FUTURE_DATE_MESSAGE
+
     return weight_kg, logged_date, note, None
 
 
@@ -807,6 +831,14 @@ def create_weight_log():
             "success": False,
             "message": "Active journey not found. Create a plan first"
         }, 404
+
+    start_date = get_journey_start_date(user_id, journey["id"])
+
+    if logged_date < start_date:
+        return {
+            "success": False,
+            "message": f"Weight entries can't be dated before this journey started ({start_date})"
+        }, 400
 
     try:
         save_weight_log(user_id, journey["id"], weight_kg, logged_date, note)
@@ -879,6 +911,14 @@ def update_weight_entry(weight_id):
         return {
             "success": False,
             "message": "The starting weight's date cannot be changed"
+        }, 400
+
+    start_date = get_journey_start_date(user_id, journey["id"])
+
+    if logged_date < start_date:
+        return {
+            "success": False,
+            "message": f"Weight entries can't be dated before this journey started ({start_date})"
         }, 400
 
     try:
@@ -1335,6 +1375,12 @@ def create_food_log():
             "message": "Logged date must use YYYY-MM-DD format"
         }, 400
 
+    if parsed_date > latest_allowed_date():
+        return {
+            "success": False,
+            "message": FUTURE_DATE_MESSAGE
+        }, 400
+
     try:
         parsed_time = time.fromisoformat(data["logged_time"])
     except (TypeError, ValueError):
@@ -1580,6 +1626,12 @@ def update_food_entry(food_id):
             "message": "Logged date must use YYYY-MM-DD format"
         }, 400
 
+    if parsed_date > latest_allowed_date():
+        return {
+            "success": False,
+            "message": FUTURE_DATE_MESSAGE
+        }, 400
+
     try:
         parsed_time = time.fromisoformat(data["logged_time"])
     except (TypeError, ValueError):
@@ -1798,6 +1850,12 @@ def create_exercise_log():
             "message": "Logged date must use YYYY-MM-DD format"
         }, 400
 
+    if parsed_date > latest_allowed_date():
+        return {
+            "success": False,
+            "message": FUTURE_DATE_MESSAGE
+        }, 400
+
     try:
         parsed_time = time.fromisoformat(data["logged_time"])
     except (TypeError, ValueError):
@@ -1995,6 +2053,12 @@ def update_exercise_entry(exercise_id):
         return {
             "success": False,
             "message": "Logged date must use YYYY-MM-DD format"
+        }, 400
+
+    if parsed_date > latest_allowed_date():
+        return {
+            "success": False,
+            "message": FUTURE_DATE_MESSAGE
         }, 400
 
     try:

@@ -36,6 +36,18 @@ Summary for the frontend; details are in each route's section below.
 - Uploaded photos are re-encoded: resized to at most 1280 px, saved as WebP
   (`food_photos/<id>.webp`) and stripped of metadata such as GPS location.
 
+## Date Rules (2026-11-13)
+
+- Food, exercise and weight `logged_date` (create and edit) and Save Plan's
+  `start_date` cannot be later than tomorrow's UTC date. One day of slack covers
+  users whose local day is ahead of the server (UTC). Otherwise 400:
+  `"You can't log entries for a future date"` (`"Start date cannot be in the future"` for plans).
+- Weight entries (create and edit) cannot be dated before the active journey's
+  starting weight date. 400: `"Weight entries can't be dated before this journey started (YYYY-MM-DD)"`.
+  Food and exercise may still be backdated.
+- The underweight-target message now rounds its suggested minimum **up** to 0.1 kg,
+  so the suggested value is always accepted.
+
 ## Authentication (2026-10-18)
 
 Login and registration are rate limited per client IP: 10 login requests and
