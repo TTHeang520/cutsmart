@@ -1,11 +1,16 @@
-# Hosting Setup: Awaiting Account and Budget
+# Hosting Options
 
-Status: deployment package prepared; no cloud resources or public URL created.
-The Dockerfile builds React and runs Flask/Waitress in one service. Local Docker
-is unavailable on the current development machine; a container build on the host
-must pass before this can be considered deployment-verified.
+**Current hosting (since v1.0.0, 2026-11-13): PythonAnywhere free plan** at
+https://cutsmart.pythonanywhere.com. Setup, updates and backups are in
+[PYTHONANYWHERE.md](PYTHONANYWHERE.md).
 
-## Proposed Render Setup
+The rest of this page records the **paid alternative** considered before launch:
+Render with the repository's Dockerfile, which builds React and runs Flask/Waitress
+in one service. It has not been set up. Consider it if CutSmart outgrows the free
+plan (for example the 512 MB disk or the monthly renewal). Moving would need the
+database and photos copied from `~/cutsmart-data` on PythonAnywhere.
+
+## Render Setup (alternative, not in use)
 
 This is a proposal, not permission to incur hosting charges. Review the current
 dashboard price before creating the service. The existing app requires persistent

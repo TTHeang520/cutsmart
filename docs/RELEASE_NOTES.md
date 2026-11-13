@@ -1,3 +1,42 @@
+# v1.0.0 - First Public Launch
+
+Released on 2026-11-13. Live at https://cutsmart.pythonanywhere.com
+
+## What you can do
+- Register and get a personal calorie-deficit plan: BMI, maintenance calories, daily
+  target, diet/exercise split by strategy, macros and timeline, with a faster option
+  that stays within safe limits.
+- Keep updating your plan in the same journey, or start a new journey; past journeys
+  stay readable in Journey History.
+- Log meals (with photos and macros), workouts (with categories) and weight (with
+  notes, a trend chart and editing, including the starting weight).
+- See today's progress, a weekly overview, your logging streak and a calendar of past days.
+
+## Changes since the preview
+- **Security:** server sessions, CSRF protection and per-account access checks on every
+  route; login and registration rate limits per visitor.
+- **Plans:** recalculated on the server, never trusted from the browser; input limits
+  (adults 18-100, realistic heights and weights); underweight targets refused with a
+  suggested healthy minimum.
+- **Logs:** weight entries can be edited; no future dates; weights can't predate the
+  journey start; text and number limits on every field.
+- **Photos:** resized to at most 1280 px, saved as WebP, location metadata removed.
+- **Frontend:** plan wizard hints, confirmation before archiving a journey, plan always
+  loaded from the server (works on any device), cached data cleared on logout, dead
+  links removed, new title and icon.
+- **Hosting:** PythonAnywhere setup, frontend packaging script, backup and update guide.
+- **Tests:** 79 backend tests; lint and build checks on every pull request.
+
+## Known limitations
+- No password reset or self-service account deletion yet.
+- Free hosting: limited storage, renewed monthly.
+- No Windows download for this release.
+- Planned improvements: error messages shown where you are (#6), shorter pages (#7).
+
+CutSmart gives general estimates, not medical advice.
+
+---
+
 # v0.1.0-preview - Local Prototype
 
 Prepared on 2026-10-18.
