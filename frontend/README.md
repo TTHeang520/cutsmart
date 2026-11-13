@@ -1,16 +1,38 @@
-# React + Vite
+# CutSmart Frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+React 19 + Vite single-page app. See the [main README](../README.md) for the whole project.
 
-Currently, two official plugins are available:
+## Commands
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+```powershell
+npm.cmd ci          # install exact dependencies from package-lock.json
+npm.cmd run dev     # development server (proxies /api to Flask on 127.0.0.1:5000)
+npm.cmd run lint    # ESLint
+npm.cmd run build   # production build into dist/
+```
 
-## React Compiler
+Run the Flask backend at the same time for `npm run dev` (see the main README).
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## Layout
 
-## Expanding the ESLint configuration
+| Folder | Contents |
+| --- | --- |
+| `src/pages/` | One component per screen (Dashboard, Plan, FoodLog, ExerciseLog, WeightTrack, Calendar, JourneyHistory, JourneyOverview, Login, Register, Welcome) |
+| `src/components/` | Shared pieces (layout, bottom navigation, charts, mascot, start-journey confirmation) |
+| `src/utils/` | `api.js` (requests, CSRF and logout clean-up), `latestPlan.js` (cached plan + refresh), date, weight and activity helpers |
+| `src/data/` | Plan and journey themes |
+| `public/` | Favicon and static images |
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+## Conventions
+
+- Call the backend with `apiFetch` from `src/utils/api.js`, using same-origin `/api/...`
+  URLs. It adds the headers the backend requires and sends users to `/login` when their
+  session ends.
+- Read the user's plan with `useLatestPlan` from `src/utils/latestPlan.js`. Don't read
+  `localStorage` directly; the server is the source of truth.
+- Keep form limits in step with the backend's rules in `docs/API_Contract.md`.
+
+## Deploying
+
+`dist/` is not committed. To update the live site, run `scripts/package-frontend.ps1`
+from the repository root and follow "Updating the site" in `docs/PYTHONANYWHERE.md`.
