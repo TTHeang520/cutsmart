@@ -1,8 +1,10 @@
-import { apiFetch } from "../utils/api";
+import { apiFetch, clearLocalAccountData } from "../utils/api";
 import { getToday } from "../utils/dateUtils";
-import { useEffect, useState } from "react";
+import { cachePlan, fetchLatestPlan, readCachedPlan } from "../utils/latestPlan";
+import { useEffect, useRef, useState } from "react";
 import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
 import CompanionMascot from "../components/CompanionMascot";
+import ConfirmStartJourneyModal from "../components/ConfirmStartJourneyModal";
 import {
   calorieCaptions,
   themeContent,
@@ -10,6 +12,16 @@ import {
 } from "../data/planThemes";
 
 const totalSteps = 8;
+
+// Keep in step with PLAN_NUMBER_LIMITS and MIN_TARGET_BMI in backend/app.py.
+const PLAN_LIMITS = {
+  age: { min: 18, max: 100, label: "Age", unit: "years" },
+  height_cm: { min: 100, max: 250, label: "Height", unit: "cm" },
+  current_weight_kg: { min: 30, max: 350, label: "Current weight", unit: "kg" },
+  target_weight_kg: { min: 30, max: 350, label: "Target weight", unit: "kg" },
+  desired_timeline_weeks: { min: 1, max: 520, label: "Timeline", unit: "weeks" },
+};
+const MIN_TARGET_BMI = 18.5;
 
 const startingForm = {
   age: "",
@@ -80,7 +92,7 @@ function Plan() {
   const savedUser = localStorage.getItem("user");
   const user = savedUser ? JSON.parse(savedUser) : null;
   const userId = user?.id;
-  const savedPlan = getStoredLatestPlan(user);
+  const savedPlan = readCachedPlan(userId);
   const planIntent = location.state?.planIntent;
   const isDashboardModify = planIntent === "modify" && Boolean(savedPlan);
   const isDashboardNewJourney = planIntent === "new";
@@ -100,46 +112,43 @@ function Plan() {
   const [isLoading, setIsLoading] = useState(false);
   const [isCheckingSavedPlan, setIsCheckingSavedPlan] = useState(Boolean(userId && !savedPlan && !planIntent));
   const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false);
+  // "create" or "restart" while the user is asked to confirm archiving the current journey.
+  const [pendingNewJourney, setPendingNewJourney] = useState(null);
+  // Set once the user starts a new plan, so a late server response cannot bring the old plan back.
+  const hasStartedNewPlanRef = useRef(false);
   const [planSaveMode, setPlanSaveMode] = useState(
     isDashboardNewJourney ? "new" : savedPlan ? "update" : "new"
   );
 
+  // Load the saved plan once per visit. It must not depend on `plan`: clearing the plan to start
+  // a new one would otherwise re-fetch the saved plan and put the summary straight back.
   useEffect(() => {
-    if (!userId || plan || planIntent) {
+    if (!userId || planIntent) {
       return;
     }
 
     let isCurrent = true;
 
-    async function fetchLatestPlan() {
-      try {
-        const response = await apiFetch(`/api/plans/latest/${userId}`);
-        const data = await response.json();
+    fetchLatestPlan(userId).then((result) => {
+      if (!isCurrent || hasStartedNewPlanRef.current) {
+        return;
+      }
 
-        if (!isCurrent || !response.ok || data.success === false || !data.plan) {
-          return;
-        }
-
-        localStorage.setItem(getLatestPlanKey({ id: userId }), JSON.stringify(data.plan));
-        setPlan(data.plan);
+      if (result?.plan) {
+        cachePlan(userId, result.plan);
+        setPlan(result.plan);
         setPlanSaveMode("update");
         setHasStarted(true);
         setPlanView("summary");
-      } catch {
-        // Existing localStorage fallback already ran during initial state setup.
-      } finally {
-        if (isCurrent) {
-          setIsCheckingSavedPlan(false);
-        }
       }
-    }
 
-    fetchLatestPlan();
+      setIsCheckingSavedPlan(false);
+    });
 
     return () => {
       isCurrent = false;
     };
-  }, [userId, plan, planIntent]);
+  }, [userId, planIntent]);
 
   function handleChange(event) {
     const { name, value } = event.target;
@@ -174,11 +183,46 @@ function Plan() {
       window.alert("Could not log out. Please check your connection and retry.");
       return;
     }
-    localStorage.removeItem("user");
+    clearLocalAccountData();
     navigate("/login");
   }
 
+  // Starting a new plan archives the current journey on the next save, so confirm first.
+  function requestNewJourney(kind) {
+    setIsAccountMenuOpen(false);
+
+    if (plan || readCachedPlan(userId)) {
+      setPendingNewJourney(kind);
+    } else if (kind === "restart") {
+      restartWizard();
+    } else {
+      handleCreateNewPlan();
+    }
+  }
+
+  function confirmNewJourney() {
+    const kind = pendingNewJourney;
+    setPendingNewJourney(null);
+
+    if (kind === "restart") {
+      restartWizard();
+    } else {
+      handleCreateNewPlan();
+    }
+  }
+
+  function restartWizard() {
+    hasStartedNewPlanRef.current = true;
+    setPlan(null);
+    setMessage("");
+    setPlanView("result");
+    setCurrentStep(0);
+    setHasStarted(false);
+    setPlanSaveMode("new");
+  }
+
   function handleCreateNewPlan() {
+    hasStartedNewPlanRef.current = true;
     setPlan(null);
     setFormData(startingForm);
     setMessage("");
@@ -248,7 +292,7 @@ function Plan() {
       const savedPlan = await saveGeneratedPlan(user, saveMode, requestBody, data.plan);
 
       setPlan(savedPlan);
-      localStorage.setItem(getLatestPlanKey(user), JSON.stringify(savedPlan));
+      cachePlan(userId, savedPlan);
       setPlanSaveMode("update");
       setPlanView("result");
       setMessage(data.message || "Plan generated successfully");
@@ -277,7 +321,7 @@ function Plan() {
       }
       const updatedPlan = await saveGeneratedPlan(user, "update", inputData, data.plan);
       setPlan(updatedPlan);
-      localStorage.setItem(getLatestPlanKey(user), JSON.stringify(updatedPlan));
+      cachePlan(userId, updatedPlan);
       setMessage("Plan option saved.");
     } catch (error) {
       setMessage(error.message || "Could not save this option. Your previous plan is unchanged.");
@@ -325,7 +369,7 @@ function Plan() {
                 <Link to="/dashboard" onClick={() => setIsAccountMenuOpen(false)}>
                   Dashboard
                 </Link>
-                <button type="button" onClick={handleCreateNewPlan}>
+                <button type="button" onClick={() => requestNewJourney("create")}>
                   Create New Plan
                 </button>
                 <button type="button" className="logout-menu-item" onClick={handleLogout}>
@@ -362,7 +406,7 @@ function Plan() {
             onPlanOption={handlePlanOption}
             isLoading={isLoading}
             message={message}
-            onCreateNewPlan={handleCreateNewPlan}
+            onCreateNewPlan={() => requestNewJourney("create")}
           />
         ) : (
           <ResultReveal
@@ -383,18 +427,17 @@ function Plan() {
             }}
             onBackResult={() => setResultStep(Math.max(resultStep - 1, 0))}
             onNext={() => setResultStep(resultStep + 1)}
-            onRestart={() => {
-              setPlan(null);
-              setMessage("");
-              setPlanView("result");
-              setCurrentStep(0);
-              setHasStarted(false);
-              // Restarting after a result creates a fresh journey when the next plan is saved.
-              setPlanSaveMode("new");
-            }}
+            onRestart={() => requestNewJourney("restart")}
           />
         )}
       </section>
+
+      {pendingNewJourney && (
+        <ConfirmStartJourneyModal
+          onCancel={() => setPendingNewJourney(null)}
+          onConfirm={confirmNewJourney}
+        />
+      )}
     </main>
   );
 }
@@ -478,7 +521,8 @@ function WizardCard({
 }) {
   const isLastStep = currentStep === totalSteps - 1;
   const isAutoAdvanceStep = currentStep === 4 || currentStep === 5;
-  const canContinue = isStepComplete(currentStep, formData);
+  const stepHint = getStepHint(currentStep, formData);
+  const canContinue = isStepComplete(currentStep, formData) && !stepHint;
   const progress = ((currentStep + 1) / totalSteps) * 100;
 
   return (
@@ -504,6 +548,7 @@ function WizardCard({
         />
       </div>
 
+      {stepHint && <p className="step-hint" role="alert">{stepHint}</p>}
       {message && <p className="error-card">{message}</p>}
 
       <div className="wizard-actions">
@@ -550,7 +595,8 @@ function StepContent({ currentStep, formData, onChange, onOptionChange }) {
             <input
               type="number"
               name="age"
-              min="1"
+              min={PLAN_LIMITS.age.min}
+              max={PLAN_LIMITS.age.max}
               value={formData.age}
               onChange={onChange}
               placeholder="22"
@@ -587,7 +633,8 @@ function StepContent({ currentStep, formData, onChange, onOptionChange }) {
           <input
             type="number"
             name="height_cm"
-            min="1"
+            min={PLAN_LIMITS.height_cm.min}
+            max={PLAN_LIMITS.height_cm.max}
             value={formData.height_cm}
             onChange={onChange}
             placeholder="175"
@@ -606,14 +653,21 @@ function StepContent({ currentStep, formData, onChange, onOptionChange }) {
           title="Where are you starting from?"
           caption="No judgement here. This is simply the starting point for the plan."
         />
-        <RangeField
-          label="Current weight"
-          name="current_weight_kg"
-          min="40"
-          max="150"
-          value={formData.current_weight_kg}
-          onChange={onChange}
-        />
+<label className="premium-field feature-field">
+          Current weight
+          <input
+            type="number"
+            name="current_weight_kg"
+            min={PLAN_LIMITS.current_weight_kg.min}
+            max={PLAN_LIMITS.current_weight_kg.max}
+            step="0.1"
+            value={formData.current_weight_kg}
+            onChange={onChange}
+            placeholder="80"
+            required
+          />
+          <span>kg</span>
+        </label>
       </>
     );
   }
@@ -625,14 +679,27 @@ function StepContent({ currentStep, formData, onChange, onOptionChange }) {
           title="What is your target weight?"
           caption="Pick a goal that feels motivating and still grounded."
         />
-        <RangeField
-          label="Target weight"
-          name="target_weight_kg"
-          min="35"
-          max="140"
-          value={formData.target_weight_kg}
-          onChange={onChange}
-        />
+<label className="premium-field feature-field">
+          Target weight
+          <input
+            type="number"
+            name="target_weight_kg"
+            min={PLAN_LIMITS.target_weight_kg.min}
+            max={PLAN_LIMITS.target_weight_kg.max}
+            step="0.1"
+            value={formData.target_weight_kg}
+            onChange={onChange}
+            placeholder="72"
+            required
+          />
+          <span>kg</span>
+        </label>
+        {getMinHealthyTarget(formData.height_cm) && (
+          <p className="step-help">
+            For {formatNumber(formData.height_cm)} cm, the lowest healthy target is{" "}
+            {formatNumber(getMinHealthyTarget(formData.height_cm))} kg.
+          </p>
+        )}
       </>
     );
   }
@@ -683,7 +750,8 @@ function StepContent({ currentStep, formData, onChange, onOptionChange }) {
           <input
             type="number"
             name="desired_timeline_weeks"
-            min="1"
+            min={PLAN_LIMITS.desired_timeline_weeks.min}
+            max={PLAN_LIMITS.desired_timeline_weeks.max}
             value={formData.desired_timeline_weeks}
             onChange={onChange}
             placeholder="18"
@@ -733,27 +801,6 @@ function StepIntro({ title, caption }) {
       <h2>{title}</h2>
       <p>{caption}</p>
     </div>
-  );
-}
-
-function RangeField({ label, name, min, max, value, onChange }) {
-  return (
-    <label className="range-field">
-      <span>{label}</span>
-      <strong>{value} kg</strong>
-      <input
-        type="range"
-        name={name}
-        min={min}
-        max={max}
-        value={value}
-        onChange={onChange}
-      />
-      <div className="range-limits">
-        <span>{min} kg</span>
-        <span>{max} kg</span>
-      </div>
-    </label>
   );
 }
 
@@ -1083,12 +1130,71 @@ async function saveGeneratedPlan(user, mode, inputData, planResult) {
     throw new Error(data.message || "Could not save your plan.");
   }
 
+  // The server recalculates the plan itself; show exactly what it stored.
   return {
-    ...inputData,
-    ...planResult,
+    ...data.plan,
     journey_id: data.journey_id,
     plan_id: data.plan_id,
   };
+}
+
+function isWithinLimits(field, value) {
+  const number = Number(value);
+  return value !== "" && Number.isFinite(number)
+    && number >= PLAN_LIMITS[field].min && number <= PLAN_LIMITS[field].max;
+}
+
+function getRangeHint(field, value) {
+  if (value === "" || value === null || value === undefined || isWithinLimits(field, value)) {
+    return "";
+  }
+
+  const { label, min, max, unit } = PLAN_LIMITS[field];
+  return `${label} must be between ${min} and ${max} ${unit}.`;
+}
+
+// Displayed minimum is rounded up so it is always accepted; validity uses the exact BMI, like the backend.
+function getMinHealthyTarget(heightCm) {
+  if (!isWithinLimits("height_cm", heightCm)) {
+    return null;
+  }
+
+  return Math.ceil(MIN_TARGET_BMI * (Number(heightCm) / 100) ** 2 * 10) / 10;
+}
+
+function getTargetHint(formData) {
+  const { target_weight_kg: target, current_weight_kg: current, height_cm: height } = formData;
+  const rangeHint = getRangeHint("target_weight_kg", target);
+
+  if (rangeHint || target === "") {
+    return rangeHint;
+  }
+
+  if (Number(target) >= Number(current)) {
+    return `Your target must be lower than your current weight (${formatNumber(current)} kg).`;
+  }
+
+  if (isWithinLimits("height_cm", height) && Number(target) / (Number(height) / 100) ** 2 < MIN_TARGET_BMI) {
+    // The minimum itself is shown just below the field.
+    return "That target would be underweight for your height.";
+  }
+
+  return "";
+}
+
+// A message for the first problem on this step, or "" when the step is valid or still empty.
+function getStepHint(step, formData) {
+  if (step === 0) return getRangeHint("age", formData.age);
+  if (step === 1) return getRangeHint("height_cm", formData.height_cm);
+  if (step === 2) return getRangeHint("current_weight_kg", formData.current_weight_kg);
+  if (step === 3) return getTargetHint(formData);
+  if (step === 6) return getRangeHint("desired_timeline_weeks", formData.desired_timeline_weeks);
+
+  if (step === totalSteps - 1) {
+    return [0, 1, 2, 3, 6].map((each) => getStepHint(each, formData)).find(Boolean) || "";
+  }
+
+  return "";
 }
 
 function isStepComplete(step, formData) {
@@ -1156,24 +1262,6 @@ function formatNumber(value) {
 function getUserInitial(user) {
   const name = user?.username || user?.email || "U";
   return name.charAt(0).toUpperCase();
-}
-
-function getLatestPlanKey(user) {
-  return user?.id ? `cutsmart_latest_plan_${user.id}` : "cutsmart_latest_plan_guest";
-}
-
-function getStoredLatestPlan(user) {
-  const rawPlan = localStorage.getItem(getLatestPlanKey(user));
-
-  if (!rawPlan) {
-    return null;
-  }
-
-  try {
-    return JSON.parse(rawPlan);
-  } catch {
-    return null;
-  }
 }
 
 function getFormDataFromPlan(plan) {

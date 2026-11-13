@@ -108,9 +108,6 @@ function JourneyOverview() {
             <h1>Journey Overview</h1>
             <p>Review your plan, progress and milestones.</p>
           </div>
-          <button type="button" aria-label="Share journey overview">
-            ···
-          </button>
         </header>
 
         {isLoading && <JourneyEmptyState title="Loading journey" text="We are gathering this journey's details." />}
@@ -154,10 +151,8 @@ function JourneyOverview() {
             <section className="journey-overview-card">
               <div className="journey-overview-section-title">
                 <h2>Plan Summary</h2>
-                {status === "active" ? (
+                {status === "active" && (
                   <Link to="/plan">View Plan Details <span aria-hidden="true">›</span></Link>
-                ) : (
-                  <button type="button" disabled>Coming Soon</button>
                 )}
               </div>
               {latestPlan ? (
