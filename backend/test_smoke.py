@@ -36,8 +36,10 @@ class JourneySmokeTest(unittest.TestCase):
                 }
                 generated = client.post("/api/plan", json=inputs)
                 self.assertEqual(generated.status_code, 200, generated.get_json())
+                # Fixed start date: weights cannot be dated before the journey starts.
                 payload = {"user_id": user_id, "input_data": inputs,
-                           "plan_result": generated.get_json()["plan"]}
+                           "plan_result": generated.get_json()["plan"],
+                           "start_date": "2026-10-18"}
                 first = client.post("/api/plans/save", json=payload).get_json()
                 journey_id = first["journey_id"]
                 weight = client.post("/api/weights", json={

@@ -887,6 +887,29 @@ def get_weight_entry(weight_id, user_id, journey_id):
 
     return weight
 
+def get_journey_start_date(user_id, journey_id):
+    """The journey's first day: the date of its starting weight (the user's local day)."""
+    connection = get_db_connection()
+
+    try:
+        row = connection.execute(
+            """
+            SELECT weight_logs.logged_date AS initial_date, plan_journeys.started_at AS started_at
+            FROM plan_journeys
+            LEFT JOIN weight_logs
+                ON weight_logs.journey_id = plan_journeys.id AND weight_logs.is_initial = 1
+            WHERE plan_journeys.id = ? AND plan_journeys.user_id = ?
+            """,
+            (journey_id, user_id)
+        ).fetchone()
+    finally:
+        connection.close()
+
+    if row is None:
+        return None
+
+    return row["initial_date"] or row["started_at"][:10]
+
 def update_weight_log(weight_id, user_id, journey_id, weight_kg, logged_date, note):
     """Edit one weight entry. Editing the initial entry also moves the journey baseline."""
     connection = get_db_connection()
