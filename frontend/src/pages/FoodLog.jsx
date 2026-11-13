@@ -224,7 +224,7 @@ function FoodLog() {
           />
         </div>
 
-        {error && <p className="app-log-empty" role="alert">{error}</p>}
+        {error && <p className="app-log-alert" role="alert">{error}</p>}
         {isLoading && <p className="app-log-empty">Loading food logs...</p>}
 
         <section className="app-log-grid">

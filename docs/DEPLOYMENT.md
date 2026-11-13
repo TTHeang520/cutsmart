@@ -1,12 +1,13 @@
 # Deployment Preparation
 
-For the free PythonAnywhere setup, follow [PYTHONANYWHERE.md](PYTHONANYWHERE.md).
-The rest of this page covers the Waitress/Docker runner (serve.py).
+The public site currently runs on PythonAnywhere. For setup, updates, backups and
+monthly renewal, follow [PYTHONANYWHERE.md](PYTHONANYWHERE.md). The rest of this
+page documents the alternative Waitress/Docker runner (`serve.py`).
 
 One Waitress process serves the built React site and Flask API under one origin.
-There is no hosted service configured yet. SQLite and private uploads require a
-single instance with persistent writable disk; multiple independent disks would
-create separate databases. PostgreSQL/object storage can be added later.
+SQLite and private uploads require a single instance with persistent writable
+disk; multiple independent disks would create separate databases.
+PostgreSQL/object storage can be added later.
 
 ## Local Preview
 
@@ -57,7 +58,7 @@ Successful, failed and malformed requests count. HTTP 429 includes JSON and Retr
 seconds. Counters are transactionally stored in SQLite and survive server restarts.
 Shared networks share limits. Distributed attacks need additional edge controls.
 
-## Before Sharing a Public Link
+## Before Publishing or Updating a Public Deployment
 
 1. Choose hosting and budget, provision persistent disk and HTTPS.
 2. Verify proxy configuration and correct client-IP separation.

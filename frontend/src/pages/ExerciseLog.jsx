@@ -226,7 +226,7 @@ function ExerciseLog() {
           />
         </div>
 
-        {error && <p className="app-log-empty" role="alert">{error}</p>}
+        {error && <p className="app-log-alert" role="alert">{error}</p>}
         {isLoading && <p className="app-log-empty">Loading exercise logs...</p>}
 
         <section className="app-log-grid">

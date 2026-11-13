@@ -1,6 +1,8 @@
 # CutSmart
 
-**Try it: https://cutsmart.pythonanywhere.com**
+[![Release checks](https://github.com/TTHeang520/cutsmart/actions/workflows/checks.yml/badge.svg)](https://github.com/TTHeang520/cutsmart/actions/workflows/checks.yml)
+
+[Live website](https://cutsmart.pythonanywhere.com) · [Latest release](https://github.com/TTHeang520/cutsmart/releases/latest) · [Report an issue](https://github.com/TTHeang520/cutsmart/issues)
 
 CutSmart helps you lose weight in a balanced way. Instead of handing out a fixed
 workout, it works out a healthy **calorie deficit** for your body and goal, splits it
@@ -90,6 +92,8 @@ The same checks run on GitHub for every push and pull request.
 | [PROJECT_HANDOFF.md](PROJECT_HANDOFF.md) | Architecture, decisions and history for new developers |
 | [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md), [docs/HOSTING_SETUP.md](docs/HOSTING_SETUP.md) | Other ways to run the server (Waitress, Docker, paid hosting) |
 | [docs/LOCAL_APP.md](docs/LOCAL_APP.md) | Packaging CutSmart as a Windows app |
+| [docs/RELEASE_CHECKLIST.md](docs/RELEASE_CHECKLIST.md) | Safe merge, deployment and release checklist |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | How to prepare and submit a change |
 
 ## Known limitations
 

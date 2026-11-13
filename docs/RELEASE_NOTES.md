@@ -1,3 +1,24 @@
+# Next release - Mobile usability
+
+## Improvements
+
+- Food, exercise and weight forms begin within the first phone screen instead of
+  sitting below tall summary sections.
+- Tracker feedback stays visible above the fixed navigation and remains announced
+  to screen readers with `role="alert"`.
+- The phone dashboard uses compact summary and quick-action grids and stays under
+  four screens with representative data.
+- Weight entry is presented before secondary profile and chart information.
+
+## Verification
+
+- 79 backend tests pass.
+- Frontend lint and production build pass.
+- At 375×812, the dashboard measures 3.34 screens; Food and Exercise forms begin
+  at 0.41 screens and the Weight form at 0.66 screens, without horizontal overflow.
+
+---
+
 # v1.0.0 - First Public Launch
 
 Released on 2026-11-13. Live at https://cutsmart.pythonanywhere.com

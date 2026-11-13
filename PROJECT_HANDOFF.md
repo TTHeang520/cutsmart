@@ -1,7 +1,7 @@
 # CutSmart Project Handoff
 
 This document is the working context for a new developer or a new AI assistant.
-Last reconciled with source: 2026-11-13, `main` at the v1.0.0 launch (PRs #1-#5).
+Last reconciled with source: 2026-11-14, `main` at the v1.0.0 launch (PRs #1-#8).
 Check `git log` and open GitHub issues first: this is a dated snapshot.
 
 ## 1. Project in One Paragraph
