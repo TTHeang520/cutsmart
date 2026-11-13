@@ -1,7 +1,10 @@
 # CutSmart for Windows - Local Preview
 
-Preview downloads were withdrawn on 2026-10-18 pending bug fixes. These
-instructions apply to local builds and future releases, not a current download.
+There is no Windows download for v1.0.0 yet: the recommended way to use CutSmart is
+the website, https://cutsmart.pythonanywhere.com. Older preview downloads (v0.1.0 to
+v0.2.1) were withdrawn on 2026-10-18. Before publishing a new Windows build, rebuild
+it from `main` and run `scripts/test-package.py` on it, because the packaging was last
+tested before the v1.0.0 changes. The Windows app and the website keep separate data.
 
 When a release is available, download its CutSmart-Windows-x64.zip. Extract All, then
 double-click CutSmart.exe. Keep the entire folder, including _internal. The browser

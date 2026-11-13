@@ -2,20 +2,19 @@
 
 ## Purpose
 
-This document describes the current frontend experience for CutSmart.
-
-The first version focuses on helping a user generate a personalised calorie-deficit plan based on body information, activity level, preferred strategy, and desired timeline.
+This document describes the frontend experience for CutSmart, centred on the plan
+wizard and its design direction. Last updated for v1.0.0 (2026-11-13).
 
 ## Current Completed Features
 
-- User registration
-- User login
-- Dashboard page
-- Protected plan page
-- Multi-step plan setup form
-- Backend connection to `POST /api/plan`
-- Personalised calorie plan result
-- BMI, BMR, maintenance calories, calorie target, deficits, macros, and timeline display
+- Registration and login (logged-in users skip straight to the dashboard)
+- Welcome page for new users without a plan
+- Multi-step plan wizard with inline limit hints, generated and saved by the backend
+- Staged plan result reveal, with a steady or faster (within safe limits) pace choice
+- Dashboard: targets, today's calories, nutrition split, weight preview, weekly overview, streak
+- Food log with photos and macros, exercise log with categories, weight tracking with editing
+- Calendar, Journey History and Journey Overview
+- Confirmation before any action that archives the current journey
 
 ## Current Plan Setup Flow
 
@@ -45,21 +44,26 @@ The user enters height in centimetres. Height is used for BMI and calorie calcul
 
 ### Step 3: Current Weight
 
-The user chooses current weight in kilograms. A slider makes the experience simple and visual.
+The user types their current weight in kilograms (30-350 kg, to 0.1 kg).
 
 ### Step 4: Target Weight
 
-The user chooses target weight in kilograms. The backend checks that target weight is lower than current weight.
+The user types their target weight (30-350 kg). It must be lower than the current
+weight and not underweight: the step shows the lowest healthy target for the user's
+height (BMI 18.5) and disables Next with a hint until the target is valid.
+
+Steps 1, 2 and 7 also show a hint and disable Next when a value is out of range
+(age 18-100, height 100-250 cm, timeline 1-520 weeks). These limits match the backend.
 
 ### Step 5: Movement Rhythm
 
-The user selects their normal exercise habit:
+The user selects how active their normal day is (planned workouts are counted
+separately through the exercise deficit):
 
-- Little or no exercise
-- Light exercise
-- Moderate exercise
-- Active exercise
-- Very active exercise
+- Mostly sitting
+- Light daily movement
+- On your feet often
+- Physical daily routine
 
 After selecting an option, the app can automatically continue to the next step.
 
@@ -245,30 +249,17 @@ frontend/src/components/results/BalancedResult.jsx
 
 ## Future Features
 
-### Food Logging
+Food logging, exercise logging and weight tracking with streaks are now implemented.
+Still open:
 
-Users can enter food they eat during the day. The system can show calories eaten, remaining daily calories, and whether the user is above or below target.
-
-### Exercise Logging
-
-Users can record walking, running, gym workouts, cycling, or sports. The app can estimate calories burned and compare it with the exercise part of the plan.
-
-### Progress Tracking
-
-Users can update their weight weekly. The app can later show weight trends, progress toward target weight, estimated completion date, streaks, and milestones.
-
-### Personalised Icons and Illustrations
-
-The current version can use emoji icons. Later versions may use custom CutSmart illustrations or SVG icons for strategy types, food logging, progress milestones, and celebrations.
+- Estimated completion date and progress milestones
+- Custom CutSmart illustrations or SVG icons instead of emoji
+- Reports, profile and settings pages
 
 ## Current Development Priority
 
-1. Add onboarding screen
-2. Improve wizard transitions
-3. Add automatic next-step behaviour for option cards
-4. Add strategy-based result themes
-5. Add sequential text reveal in the result screen
-6. Improve result page visuals
-7. Test the complete frontend-to-backend plan flow
+After the v1.0.0 launch, open frontend work is tracked as GitHub issues:
 
-Food logging and progress tracking should be developed after the core plan-generation flow is stable.
+1. Show error messages where the user is looking, not only at the top of the page (#6)
+2. Shorten long pages, especially on phones (#7)
+3. Date inputs: no future dates; weight entries not before the journey start

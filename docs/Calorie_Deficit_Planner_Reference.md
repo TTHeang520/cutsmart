@@ -306,13 +306,24 @@ target_weight_kg >= current_weight_kg
 
 Response should explain that version 1 only supports weight loss.
 
-Underweight target warning:
+Underweight target (rejected since v1.0.0):
 
 ```text
 target_bmi < 18.5
 ```
 
-Response should warn that the target weight may result in an underweight BMI.
+The request is rejected with a message suggesting the lowest healthy target,
+`18.5 * height_m^2` rounded **up** to 0.1 kg so the suggestion is always accepted.
+
+Input limits (v1.0.0): age 18-100, height 100-250 cm, current and target weight
+30-350 kg, desired timeline 1-520 weeks. The formulas are for adults, and values
+outside these ranges are almost always typing mistakes.
+
+Faster option: when a requested timeline is too fast, the steady plan is returned
+together with an `alternative_plan` that uses the largest safe deficit
+(`min(1000, maintenance_calories - safety_floor)`). Sending `plan_option:
+"fastest_safe"` returns that faster plan instead. The recommended timeline is never
+shown as less than 1 week.
 
 Low calorie warning:
 
