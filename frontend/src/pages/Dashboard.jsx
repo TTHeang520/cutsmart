@@ -1,25 +1,28 @@
-import { apiFetch, API_BASE_URL } from "../utils/api";
+import { apiFetch, API_BASE_URL, clearLocalAccountData } from "../utils/api";
 import { addDays, getToday, getWeekDates } from "../utils/dateUtils";
 import { calculateStreak, fetchDailyActivity, formatDayCount } from "../utils/activityUtils";
 import { useEffect, useRef, useState } from "react";
 import { Link, Navigate, useNavigate } from "react-router-dom";
 import HeroMascot from "../components/HeroMascot";
+import ConfirmStartJourneyModal from "../components/ConfirmStartJourneyModal";
 import WeightLineChart from "../components/WeightLineChart";
 import dashboardMascot from "../assets/companions/dashboard_mascot.png";
 import { getJourneyTheme } from "../data/journeyThemes";
 import { getWeightStats } from "../utils/weightUtils";
+import { useLatestPlan } from "../utils/latestPlan";
 
 function Dashboard() {
   const navigate = useNavigate();
   const savedUser = localStorage.getItem("user");
   const user = savedUser ? JSON.parse(savedUser) : null;
   const userId = user?.id;
-  const [latestPlan, setLatestPlan] = useState(() => getStoredLatestPlan(user));
-  const [isCheckingPlan, setIsCheckingPlan] = useState(Boolean(userId));
+  const { plan: latestPlan, isChecking: isCheckingPlan } = useLatestPlan(userId);
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
   const [isPlanDetailsOpen, setIsPlanDetailsOpen] = useState(false);
   const [isStartJourneyConfirmOpen, setIsStartJourneyConfirmOpen] = useState(false);
   const [weightHistory, setWeightHistory] = useState([]);
+  // The journey holds the real starting weight; the plan's current weight changes when the plan is modified.
+  const [weightJourney, setWeightJourney] = useState(null);
   const [caloriesEaten, setCaloriesEaten] = useState(0);
   const [caloriesBurned, setCaloriesBurned] = useState(0);
   const [activityDays, setActivityDays] = useState([]);
@@ -27,7 +30,7 @@ function Dashboard() {
   const today = getToday();
   const strategy = latestPlan?.strategy || "balanced";
   const theme = getJourneyTheme(strategy);
-  const weightStats = getWeightStats({ weights: weightHistory, plan: latestPlan });
+  const weightStats = getWeightStats({ weights: weightHistory, plan: latestPlan, journey: weightJourney });
   const streak = calculateStreak(activityDays, today);
   const week = getWeekSummary(activityDays, today, latestPlan);
 
@@ -40,8 +43,7 @@ function Dashboard() {
 
     async function fetchDashboardData() {
       try {
-        const [planData, weightData, foodData, exerciseData, activity] = await Promise.all([
-          fetchLatestPlan(userId),
+        const [weightData, foodData, exerciseData, activity] = await Promise.all([
           fetchOptionalJson(`${API_BASE_URL}/api/weights/history/${userId}`),
           fetchOptionalJson(`${API_BASE_URL}/api/foods/${userId}?date=${today}`),
           fetchOptionalJson(`${API_BASE_URL}/api/exercises/${userId}?date=${today}`),
@@ -53,29 +55,18 @@ function Dashboard() {
           return;
         }
 
-        if (planData?.plan) {
-          localStorage.setItem(getLatestPlanKey({ id: userId }), JSON.stringify(planData.plan));
-          setLatestPlan(planData.plan);
-        } else if (planData?.missing) {
-          // The server has no plan, so a cached one is stale.
-          localStorage.removeItem(getLatestPlanKey({ id: userId }));
-          setLatestPlan(null);
-        }
-
         setWeightHistory(Array.isArray(weightData?.history) ? weightData.history : []);
+        setWeightJourney(weightData?.journey || null);
         setCaloriesEaten(Number(foodData?.summary?.total_calories || 0));
         setCaloriesBurned(Number(exerciseData?.summary?.total_calories_burned || 0));
         setActivityDays(activity);
       } catch {
-        // Keep the cached plan only. Active journey logs should not fall back to old localStorage data.
+        // Active journey logs should not fall back to old browser data.
         if (isCurrent) {
           setWeightHistory([]);
+          setWeightJourney(null);
           setCaloriesEaten(0);
           setCaloriesBurned(0);
-        }
-      } finally {
-        if (isCurrent) {
-          setIsCheckingPlan(false);
         }
       }
     }
@@ -113,7 +104,7 @@ function Dashboard() {
       window.alert("Could not log out. Please check your connection and retry.");
       return;
     }
-    localStorage.removeItem("user");
+    clearLocalAccountData();
     navigate("/login");
   }
 
@@ -130,36 +121,9 @@ function Dashboard() {
     return <Navigate to="/login" replace />;
   }
 
+  // First-time users (no plan yet) start on the Welcome page.
   if (!latestPlan && !isCheckingPlan) {
-    return (
-      <main className="dashboard-page daily-dashboard-page">
-        <section className="dashboard-panel daily-dashboard-shell dashboard-empty-state">
-          <header className="daily-dashboard-topbar">
-            <div>
-              <p className="daily-dashboard-greeting">Hi, {user.username}</p>
-              <h1>No plan yet</h1>
-              <p>Create your first plan to unlock your dashboard.</p>
-            </div>
-            <div className="daily-dashboard-icons" aria-label="Dashboard actions">
-              <button type="button" aria-label="Profile">
-                <span aria-hidden="true">{user.username?.charAt(0).toUpperCase() || "U"}</span>
-              </button>
-            </div>
-          </header>
-
-          <div className="empty-plan-card">
-            <div className="empty-plan-orb" aria-hidden="true">CS</div>
-            <span className="daily-dashboard-eyebrow">Start here</span>
-            <h2>Create your first plan to unlock your dashboard.</h2>
-            <p>
-              CutSmart will calculate your daily calorie target, split your diet
-              and exercise deficit, and prepare your tracking workspace.
-            </p>
-            <Link to="/plan">Create My Plan</Link>
-          </div>
-        </section>
-      </main>
-    );
+    return <Navigate to="/welcome" replace />;
   }
 
   return (
@@ -176,8 +140,6 @@ function Dashboard() {
           <Link to="/exercise-log"><span aria-hidden="true">✦</span>Exercise Log</Link>
           <Link to="/weight-track"><span aria-hidden="true">▱</span>Weight Track</Link>
           <Link to="/calendar"><span aria-hidden="true">▦</span>Calendar</Link>
-          <a href="#reports" onClick={(event) => event.preventDefault()}><span aria-hidden="true">▥</span>Reports</a>
-          <a href="#settings" onClick={(event) => event.preventDefault()}><span aria-hidden="true">⚙</span>Settings</a>
         </nav>
         <div className="sidebar-motivation-card">
           <span aria-hidden="true">🔥</span>
@@ -197,7 +159,7 @@ function Dashboard() {
       >
         <header className="premium-dashboard-header">
           <div>
-            <p className="daily-dashboard-greeting">Good morning, {user.username}</p>
+            <p className="daily-dashboard-greeting">{getGreeting()}, {user.username}</p>
             <h1>Daily Dashboard</h1>
             <p>Here’s your progress for today. Let’s make it count.</p>
           </div>
@@ -226,17 +188,11 @@ function Dashboard() {
                     <span>{user.email || "No email saved"}</span>
                   </div>
 
-                  <Link to="/profile" onClick={() => setIsProfileMenuOpen(false)}>
-                    Profile
-                  </Link>
                   <Link to="/plan" onClick={() => setIsProfileMenuOpen(false)}>
                     Current Journey
                   </Link>
                   <Link to="/journey-history" onClick={() => setIsProfileMenuOpen(false)}>
                     Journey History
-                  </Link>
-                  <Link to="/activity-history" onClick={() => setIsProfileMenuOpen(false)}>
-                    Activity History
                   </Link>
                   <button type="button" className="logout-menu-item" onClick={handleLogout}>
                     Log out
@@ -316,7 +272,7 @@ function Dashboard() {
           <article className="dashboard-feature-card dashboard-weight-card">
             <span className="daily-dashboard-eyebrow">Weight</span>
             <h2>{weightStats.latestWeight ? `${formatNumber(weightStats.latestWeight)} kg` : "--"}</h2>
-            <WeightPreview history={weightHistory} plan={latestPlan} />
+            <WeightPreview history={weightHistory} plan={latestPlan} journey={weightJourney} />
             <Link to="/weight-track">Open Weight Track</Link>
           </article>
 
@@ -324,8 +280,17 @@ function Dashboard() {
             <h2>Quick actions</h2>
             <div className="quick-action-grid">
               <Link className="quick-calendar" to="/calendar"><span className="quick-action-icon" aria-hidden="true">▣</span><span>Calendar</span></Link>
-              <a className="quick-streak" href="#streak" onClick={(event) => event.preventDefault()}><span className="quick-action-icon" aria-hidden="true">🔥</span><span>Streak</span><small>{formatDayCount(streak)}</small></a>
-              <a className="quick-reports" href="#reports" onClick={(event) => event.preventDefault()}><span className="quick-action-icon" aria-hidden="true">▥</span><span>Reports</span></a>
+              <a
+                className="quick-streak"
+                href="#streak"
+                onClick={(event) => {
+                  event.preventDefault();
+                  document.getElementById("streak")?.scrollIntoView({ behavior: "smooth", block: "center" });
+                }}
+              >
+                <span className="quick-action-icon" aria-hidden="true">🔥</span><span>Streak</span><small>{formatDayCount(streak)}</small>
+              </a>
+              <Link className="quick-reports" to="/journey-history"><span className="quick-action-icon" aria-hidden="true">▥</span><span>Journeys</span></Link>
               <Link className="quick-weight" to="/weight-track"><span className="quick-action-icon" aria-hidden="true">＋</span><span>Add Weight</span></Link>
             </div>
           </article>
@@ -494,38 +459,6 @@ function PlanDetailsModal({ plan, onClose, onModify }) {
   );
 }
 
-function ConfirmStartJourneyModal({ onCancel, onConfirm }) {
-  return (
-    <div className="dashboard-modal-backdrop" role="presentation" onMouseDown={onCancel}>
-      <section
-        className="dashboard-plan-modal dashboard-confirm-modal"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="start-journey-title"
-        onMouseDown={(event) => event.stopPropagation()}
-      >
-        <div className="dashboard-modal-header">
-          <div>
-            <span className="daily-dashboard-eyebrow">New journey</span>
-            <h2 id="start-journey-title">Start New Journey?</h2>
-          </div>
-          <button type="button" onClick={onCancel} aria-label="Close confirmation">×</button>
-        </div>
-
-        <p className="dashboard-confirm-copy">
-          This will reset dashboard progress, streak, and calendar tracking for the new journey.
-          Your previous journeys will remain available in Journey History.
-        </p>
-
-        <div className="dashboard-modal-actions">
-          <button type="button" onClick={onCancel}>Cancel</button>
-          <button type="button" onClick={onConfirm}>Start Journey</button>
-        </div>
-      </section>
-    </div>
-  );
-}
-
 function PlanDetail({ label, value }) {
   return (
     <div className="dashboard-plan-detail">
@@ -585,8 +518,8 @@ function MacroPill({ label, value }) {
   );
 }
 
-function WeightPreview({ history, plan }) {
-  const stats = getWeightStats({ weights: history, plan });
+function WeightPreview({ history, plan, journey }) {
+  const stats = getWeightStats({ weights: history, plan, journey });
 
   return (
     <div className="weight-preview">
@@ -603,6 +536,16 @@ function WeightPreview({ history, plan }) {
       </div>
     </div>
   );
+}
+
+function getGreeting() {
+  const hour = new Date().getHours();
+
+  if (hour < 12) {
+    return "Good morning";
+  }
+
+  return hour < 18 ? "Good afternoon" : "Good evening";
 }
 
 function getWeekSummary(activityDays, today, plan) {
@@ -643,22 +586,6 @@ function getStreakMessage(streak, activityDays, today) {
   return loggedToday ? "Nice! Today is logged. Keep it going tomorrow." : "Log something today to keep your streak alive.";
 }
 
-// Returns { plan }, { missing: true } when the server has none, or null when unreachable.
-async function fetchLatestPlan(userId) {
-  try {
-    const response = await apiFetch(`${API_BASE_URL}/api/plans/latest/${userId}`);
-
-    if (response.status === 404) {
-      return { missing: true };
-    }
-
-    const data = await response.json();
-    return response.ok && data.plan ? { plan: data.plan } : null;
-  } catch {
-    return null;
-  }
-}
-
 async function fetchOptionalJson(url) {
   try {
     const response = await apiFetch(url);
@@ -672,24 +599,6 @@ async function fetchOptionalJson(url) {
   } catch {
     return null;
   }
-}
-
-function getStoredLatestPlan(user) {
-  const savedPlan = localStorage.getItem(getLatestPlanKey(user));
-
-  if (!savedPlan) {
-    return null;
-  }
-
-  try {
-    return JSON.parse(savedPlan);
-  } catch {
-    return null;
-  }
-}
-
-function getLatestPlanKey(user) {
-  return user?.id ? `cutsmart_latest_plan_${user.id}` : "cutsmart_latest_plan_guest";
 }
 
 function formatLabel(value) {

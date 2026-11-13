@@ -1,5 +1,4 @@
-import { apiFetch } from "../utils/api";
-import { useEffect, useState } from "react";
+import { useLatestPlan } from "../utils/latestPlan";
 import { Link, Navigate } from "react-router-dom";
 import CompanionMascot from "../components/CompanionMascot";
 
@@ -7,45 +6,7 @@ function Welcome() {
   const savedUser = localStorage.getItem("user");
   const user = savedUser ? JSON.parse(savedUser) : null;
   const userId = user?.id;
-  const [latestPlan, setLatestPlan] = useState(() => getStoredLatestPlan(user));
-
-  useEffect(() => {
-    if (!userId) {
-      return;
-    }
-
-    let isCurrent = true;
-
-    async function fetchLatestPlan() {
-      try {
-        const response = await apiFetch(`/api/plans/latest/${userId}`);
-
-        if (isCurrent && response.status === 404) {
-          // The server has no plan, so a cached one is stale.
-          localStorage.removeItem(getLatestPlanKey({ id: userId }));
-          setLatestPlan(null);
-          return;
-        }
-
-        const data = await response.json();
-
-        if (!isCurrent || !response.ok || data.success === false || !data.plan) {
-          return;
-        }
-
-        localStorage.setItem(getLatestPlanKey({ id: userId }), JSON.stringify(data.plan));
-        setLatestPlan(data.plan);
-      } catch {
-        // Keep localStorage fallback when the backend is unavailable.
-      }
-    }
-
-    fetchLatestPlan();
-
-    return () => {
-      isCurrent = false;
-    };
-  }, [userId]);
+  const { plan: latestPlan } = useLatestPlan(userId);
 
   if (!user) {
     return <Navigate to="/login" replace />;
@@ -85,24 +46,6 @@ function WelcomeStep({ number, text }) {
       <strong>{text}</strong>
     </div>
   );
-}
-
-function getStoredLatestPlan(user) {
-  const savedPlan = localStorage.getItem(getLatestPlanKey(user));
-
-  if (!savedPlan) {
-    return null;
-  }
-
-  try {
-    return JSON.parse(savedPlan);
-  } catch {
-    return null;
-  }
-}
-
-function getLatestPlanKey(user) {
-  return user?.id ? `cutsmart_latest_plan_${user.id}` : "cutsmart_latest_plan_guest";
 }
 
 export default Welcome;

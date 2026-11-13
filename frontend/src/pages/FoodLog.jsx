@@ -1,4 +1,5 @@
 import { apiFetch, API_BASE_URL } from "../utils/api";
+import { useLatestPlan } from "../utils/latestPlan";
 import { getCurrentTime, getToday } from "../utils/dateUtils";
 import { useEffect, useMemo, useState } from "react";
 import { Link, Navigate } from "react-router-dom";
@@ -7,11 +8,10 @@ import { Apple, Coffee, Flame, Hourglass, LayoutDashboard, Target, Utensils } fr
 const PHOTO_TYPES = ["image/jpeg", "image/png", "image/webp"];
 const MAX_PHOTO_BYTES = 5 * 1024 * 1024;
 
-
 function FoodLog() {
   const savedUser = localStorage.getItem("user");
   const user = savedUser ? JSON.parse(savedUser) : null;
-  const latestPlan = getStoredLatestPlan(user);
+  const { plan: latestPlan } = useLatestPlan(user?.id);
   const today = getToday();
   const [entries, setEntries] = useState([]);
   const [mealName, setMealName] = useState("");
@@ -88,7 +88,7 @@ function FoodLog() {
     setIsSaving(true);
     let savedFood = null;
     const foodData = {
-      food_name: mealName,
+      food_name: mealName.trim(),
       calories: Number(calories),
       meal_type: mealType,
       logged_date: loggedDate,
@@ -242,6 +242,7 @@ function FoodLog() {
               <input
                 type="text"
                 value={mealName}
+                maxLength={100}
                 onChange={(event) => setMealName(event.target.value)}
                 placeholder="e.g. Chicken rice, Salad, Protein shake"
                 required
@@ -253,6 +254,7 @@ function FoodLog() {
                 <input
                   type="number"
                   min="1"
+                  max="10000"
                   value={calories}
                   onChange={(event) => setCalories(event.target.value)}
                   placeholder="e.g. 520"
@@ -292,15 +294,15 @@ function FoodLog() {
             <div className="app-form-row">
               <label>
                 Protein (g)
-                <input type="number" min="0" value={protein} onChange={(event) => setProtein(event.target.value)} placeholder="Optional" />
+                <input type="number" min="0" max="1000" step="0.1" value={protein} onChange={(event) => setProtein(event.target.value)} placeholder="Optional" />
               </label>
               <label>
                 Carbs (g)
-                <input type="number" min="0" value={carbs} onChange={(event) => setCarbs(event.target.value)} placeholder="Optional" />
+                <input type="number" min="0" max="1000" step="0.1" value={carbs} onChange={(event) => setCarbs(event.target.value)} placeholder="Optional" />
               </label>
               <label>
                 Fat (g)
-                <input type="number" min="0" value={fat} onChange={(event) => setFat(event.target.value)} placeholder="Optional" />
+                <input type="number" min="0" max="1000" step="0.1" value={fat} onChange={(event) => setFat(event.target.value)} placeholder="Optional" />
               </label>
             </div>
             <label>
@@ -308,6 +310,7 @@ function FoodLog() {
               <input
                 type="text"
                 value={notes}
+                maxLength={500}
                 onChange={(event) => setNotes(event.target.value)}
                 placeholder="Optional note"
               />
@@ -609,22 +612,6 @@ async function deleteFoodEntry(foodId, userId) {
   }
 
   return data;
-}
-
-function getStoredLatestPlan(user) {
-  const savedPlan = localStorage.getItem(
-    user?.id ? `cutsmart_latest_plan_${user.id}` : "cutsmart_latest_plan_guest"
-  );
-
-  if (!savedPlan) {
-    return null;
-  }
-
-  try {
-    return JSON.parse(savedPlan);
-  } catch {
-    return null;
-  }
 }
 
 function formatLabel(value) {

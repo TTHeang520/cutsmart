@@ -1,4 +1,5 @@
 import { apiFetch, API_BASE_URL } from "../utils/api";
+import { useLatestPlan } from "../utils/latestPlan";
 import { getCurrentTime, getToday, getWeekDates } from "../utils/dateUtils";
 import { fetchDailyActivity } from "../utils/activityUtils";
 import { useEffect, useMemo, useState } from "react";
@@ -19,12 +20,10 @@ import {
   Zap,
 } from "lucide-react";
 
-
-
 function ExerciseLog() {
   const savedUser = localStorage.getItem("user");
   const user = savedUser ? JSON.parse(savedUser) : null;
-  const latestPlan = getStoredLatestPlan(user);
+  const { plan: latestPlan } = useLatestPlan(user?.id);
   const today = getToday();
   const [entries, setEntries] = useState([]);
   const [exerciseName, setExerciseName] = useState("");
@@ -114,7 +113,7 @@ function ExerciseLog() {
     setError("");
 
     const exerciseData = {
-      exercise_name: exerciseName,
+      exercise_name: exerciseName.trim(),
       duration_minutes: Number(duration),
       calories_burned: Number(caloriesBurned),
       logged_date: loggedDate,
@@ -245,6 +244,7 @@ function ExerciseLog() {
               <input
                 type="text"
                 value={exerciseName}
+                maxLength={100}
                 onChange={(event) => setExerciseName(event.target.value)}
                 placeholder="e.g. Running, Push ups, Cycling"
                 required
@@ -266,6 +266,7 @@ function ExerciseLog() {
                 <input
                   type="number"
                   min="1"
+                  max="1440"
                   value={duration}
                   onChange={(event) => setDuration(event.target.value)}
                   placeholder="30"
@@ -277,6 +278,7 @@ function ExerciseLog() {
                 <input
                   type="number"
                   min="1"
+                  max="10000"
                   value={caloriesBurned}
                   onChange={(event) => setCaloriesBurned(event.target.value)}
                   placeholder="180"
@@ -309,6 +311,7 @@ function ExerciseLog() {
               <input
                 type="text"
                 value={notes}
+                maxLength={500}
                 onChange={(event) => setNotes(event.target.value)}
                 placeholder="Optional note"
               />
@@ -568,22 +571,6 @@ async function deleteExerciseEntry(exerciseId, userId) {
   }
 
   return data;
-}
-
-function getStoredLatestPlan(user) {
-  const savedPlan = localStorage.getItem(
-    user?.id ? `cutsmart_latest_plan_${user.id}` : "cutsmart_latest_plan_guest"
-  );
-
-  if (!savedPlan) {
-    return null;
-  }
-
-  try {
-    return JSON.parse(savedPlan);
-  } catch {
-    return null;
-  }
 }
 
 function formatNumber(value) {
